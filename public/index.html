@@ -236,6 +236,57 @@
     
     <div id="day-counter">Day 1 / 30</div>
     
+    <!-- P0: AIVIS音声コントロールパネル -->
+    <div id="audio-controls" style="
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 15px;
+      margin: 20px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 2px solid rgba(255, 217, 61, 0.3);
+    ">
+      <div style="display: flex; align-items: center; gap: 15px;">
+        <button id="audio-toggle" style="
+          background: linear-gradient(90deg, #ff6b6b, #ffd93d);
+          border: none;
+          padding: 8px 16px;
+          border-radius: 5px;
+          color: black;
+          font-weight: bold;
+          cursor: pointer;
+          transition: all 0.3s;
+        ">
+          🔊 音声ON
+        </button>
+        
+        <div style="display: flex; align-items: center; gap: 10px; color: #ffd93d;">
+          <span>🎵</span>
+          <input type="range" id="volume-slider" min="0" max="100" value="70" style="
+            width: 100px;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.3);
+            outline: none;
+            border-radius: 5px;
+          ">
+          <span id="volume-display">70%</span>
+        </div>
+      </div>
+      
+      <div id="audio-status" style="
+        font-size: 12px;
+        color: #888;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      ">
+        <span id="aivis-status">🎙️ AIVIS待機中</span>
+        <span id="audio-info">🎭 感情: 平穏</span>
+        <span id="performance-info" style="color: #aaffaa;">⚡ 並列処理待機</span>
+      </div>
+    </div>
+    
     <div id="game-info">
       <div class="info-item">
         <div class="info-label">役割</div>
@@ -252,6 +303,42 @@
     </div>
     
     <div id="special-event" style="display: none;"></div>
+    
+    <!-- P0: リアルタイム検索結果表示 -->
+    <div id="search-event" style="
+      display: none;
+      background: linear-gradient(135deg, rgba(0, 150, 255, 0.2), rgba(0, 255, 150, 0.2));
+      border: 2px solid rgba(0, 200, 255, 0.5);
+      border-radius: 10px;
+      padding: 20px;
+      margin: 15px 0;
+      box-shadow: 0 0 20px rgba(0, 200, 255, 0.3);
+    ">
+      <div style="
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+        color: #00ccff;
+        font-weight: bold;
+        font-size: 16px;
+      ">
+        <span>🔍</span>
+        <span id="search-title">リアルタイム検索発動</span>
+        <span id="search-mood-indicator"></span>
+      </div>
+      <div id="search-content" style="
+        color: #e0f6ff;
+        line-height: 1.6;
+        font-size: 14px;
+      "></div>
+      <div id="search-query" style="
+        margin-top: 10px;
+        font-size: 12px;
+        color: #88ccff;
+        font-style: italic;
+      "></div>
+    </div>
     
     <div id="narrative">
       始まりの村アルファで目覚めたあなた。
@@ -293,8 +380,237 @@
       gold: 100
     };
     
+    // P0: AIVIS音声管理
+    let audioEnabled = true;
+    let audioVolume = 0.7;
+    let currentAudio = null;
+    
+    // P0: 音声再生関数
+    async function playAudio(audioData, type = 'narrative') {
+      if (!audioEnabled || !audioData) return;
+      
+      try {
+        // 前の音声を停止
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio = null;
+        }
+        
+        // Base64データから音声を作成
+        const audio = new Audio(audioData);
+        audio.volume = audioVolume;
+        
+        // 音声状態更新
+        updateAudioStatus(`🎵 再生中: ${type}`, getEmotionByDay(currentDay));
+        
+        audio.addEventListener('ended', () => {
+          updateAudioStatus('🎙️ AIVIS待機中', getEmotionByDay(currentDay));
+          currentAudio = null;
+        });
+        
+        audio.addEventListener('error', (e) => {
+          console.error('Audio playback error:', e);
+          updateAudioStatus('❌ 音声エラー', getEmotionByDay(currentDay));
+          currentAudio = null;
+        });
+        
+        currentAudio = audio;
+        await audio.play();
+        
+      } catch (error) {
+        console.error('音声再生エラー:', error);
+        updateAudioStatus('❌ 再生失敗', getEmotionByDay(currentDay));
+      }
+    }
+    
+    // Day別感情状態取得
+    function getEmotionByDay(day) {
+      if (day <= 10) return '平穏';
+      if (day <= 20) return '不安';
+      if (day <= 25) return '緊張';
+      return '恐怖';
+    }
+    
+    // 音声状態UI更新
+    function updateAudioStatus(status, emotion) {
+      document.getElementById('aivis-status').textContent = status;
+      document.getElementById('audio-info').textContent = `🎭 感情: ${emotion}`;
+    }
+
+    // P0: パフォーマンス情報表示
+    function updatePerformanceInfo(performance) {
+      const perfElement = document.getElementById('performance-info');
+      
+      if (!perfElement || !performance) return;
+
+      const { totalTime, parallelTime, serialTime, tasksCompleted, tasksSkipped } = performance;
+      
+      // パフォーマンス改善度を計算（並列処理の効果）
+      const efficiency = parallelTime > 0 ? Math.round((parallelTime / totalTime) * 100) : 0;
+      const speedup = parallelTime > 0 ? ((parallelTime + serialTime) / totalTime).toFixed(1) : '1.0';
+      
+      // 色分け（高速 = 緑、普通 = 黄、遅い = 赤）
+      let perfColor = '#aaffaa'; // デフォルト緑
+      if (totalTime > 3000) perfColor = '#ffaaaa'; // 3秒超で赤
+      else if (totalTime > 1500) perfColor = '#ffffaa'; // 1.5秒超で黄
+      
+      perfElement.style.color = perfColor;
+      perfElement.textContent = `⚡ ${totalTime}ms (${efficiency}%並列) ${tasksCompleted}完了`;
+      
+      // 詳細情報をツールチップ風に表示（コンソール）
+      console.log(`⚡ 詳細パフォーマンス:
+        - 総時間: ${totalTime}ms
+        - 並列処理: ${parallelTime}ms  
+        - 順次処理: ${serialTime}ms
+        - 完了タスク: ${tasksCompleted}
+        - スキップ: ${tasksSkipped}
+        - 高速化: ${speedup}x
+        - 並列効率: ${efficiency}%`);
+    }
+
+    // P0: リアルタイム検索イベント表示
+    function displaySearchEvent(searchEvent, day) {
+      const searchEl = document.getElementById('search-event');
+      const titleEl = document.getElementById('search-title');
+      const moodEl = document.getElementById('search-mood-indicator');
+      const contentEl = document.getElementById('search-content');
+      const queryEl = document.getElementById('search-query');
+
+      // 感情に応じた表示調整
+      const moodEmojis = {
+        'hopeful': '✨',
+        'neutral': '📊',
+        'concerned': '⚠️',
+        'urgent': '🚨',
+        'desperate': '💀'
+      };
+
+      const moodColors = {
+        'hopeful': 'rgba(0, 255, 100, 0.3)',
+        'neutral': 'rgba(0, 150, 255, 0.3)',
+        'concerned': 'rgba(255, 200, 0, 0.3)',
+        'urgent': 'rgba(255, 100, 0, 0.3)',
+        'desperate': 'rgba(255, 0, 0, 0.3)'
+      };
+
+      // タイトルと感情表示
+      titleEl.textContent = `Day ${day} リアルタイム検索発動`;
+      moodEl.textContent = moodEmojis[searchEvent.mood] || '🔍';
+
+      // 背景色を感情に応じて調整
+      const moodColor = moodColors[searchEvent.mood] || moodColors.neutral;
+      searchEl.style.background = `linear-gradient(135deg, ${moodColor}, rgba(0, 255, 150, 0.2))`;
+
+      // 検索統合結果を表示
+      contentEl.textContent = searchEvent.integration || searchEvent.results;
+
+      // 検索クエリを表示（デバッグ情報として）
+      if (searchEvent.query && searchEvent.query !== searchEvent.integration) {
+        queryEl.textContent = `🔎 検索: "${searchEvent.query}"`;
+      } else {
+        queryEl.textContent = '';
+      }
+
+      // 要素を表示
+      searchEl.style.display = 'block';
+
+      // ログ出力
+      console.log(`🔍 [Day ${day}] 検索UI表示:`, searchEvent);
+
+      // 検索イベント専用音声（あれば）
+      if (searchEvent.integration) {
+        // 検索結果を音声化（非同期）
+        setTimeout(async () => {
+          try {
+            const response = await fetch('/api/audio/synthesize', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: searchEvent.integration,
+                day: day,
+                context: 'search_result'
+              })
+            });
+
+            const audioData = await response.json();
+            if (audioData.success && audioData.audioData) {
+              await playAudio(audioData.audioData, 'search');
+            }
+          } catch (error) {
+            console.error('検索結果音声エラー:', error);
+          }
+        }, 1500); // ナレーション後に再生
+      }
+    }
+    
+    // 音声コントロール初期化
+    function initializeAudioControls() {
+      // 音声ON/OFFトグル
+      document.getElementById('audio-toggle').addEventListener('click', async (e) => {
+        audioEnabled = !audioEnabled;
+        
+        const btn = e.target;
+        if (audioEnabled) {
+          btn.textContent = '🔊 音声ON';
+          btn.style.background = 'linear-gradient(90deg, #ff6b6b, #ffd93d)';
+        } else {
+          btn.textContent = '🔇 音声OFF';
+          btn.style.background = 'linear-gradient(90deg, #888, #aaa)';
+          
+          // 再生中の音声を停止
+          if (currentAudio) {
+            currentAudio.pause();
+            currentAudio = null;
+          }
+        }
+        
+        // サーバーに音声設定を送信
+        try {
+          await fetch('/api/audio/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'toggle', value: audioEnabled })
+          });
+        } catch (error) {
+          console.error('音声制御エラー:', error);
+        }
+        
+        updateAudioStatus(
+          audioEnabled ? '🎙️ AIVIS待機中' : '🔇 音声無効',
+          getEmotionByDay(currentDay)
+        );
+      });
+      
+      // ボリューム調整
+      const volumeSlider = document.getElementById('volume-slider');
+      const volumeDisplay = document.getElementById('volume-display');
+      
+      volumeSlider.addEventListener('input', async (e) => {
+        const volume = parseInt(e.target.value);
+        audioVolume = volume / 100;
+        volumeDisplay.textContent = `${volume}%`;
+        
+        // 再生中の音声のボリュームも調整
+        if (currentAudio) {
+          currentAudio.volume = audioVolume;
+        }
+        
+        // サーバーにボリューム設定を送信
+        try {
+          await fetch('/api/audio/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'volume', value: audioVolume })
+          });
+        } catch (error) {
+          console.error('ボリューム制御エラー:', error);
+        }
+      });
+    }
+    
     // 初回起動時に最初の選択肢を取得
     window.addEventListener('load', async () => {
+      initializeAudioControls(); // P0: 音声コントロール初期化
       await getInitialChoices();
     });
     
@@ -367,11 +683,30 @@
       } else {
         document.getElementById('special-event').style.display = 'none';
       }
+
+      // P0: リアルタイム検索イベント表示
+      if (data.searchEvent) {
+        displaySearchEvent(data.searchEvent, currentDay);
+      } else {
+        document.getElementById('search-event').style.display = 'none';
+      }
       
       // ナレーション更新（タイプライター効果）
       const narrativeEl = document.getElementById('narrative');
       narrativeEl.textContent = '';
       typeWriter(data.narrative, narrativeEl);
+      
+      // P0: 音声自動再生
+      if (data.audio && data.audio.data) {
+        console.log(`🎵 [Day ${currentDay}] 音声データ受信:`, data.audio.reason);
+        // タイプライター効果開始後、少し遅れて音声再生
+        setTimeout(() => {
+          playAudio(data.audio.data, 'narrative');
+        }, 500);
+      } else if (data.narrative) {
+        // 音声データがない場合はスキップ理由をログ出力
+        console.log(`⏭️ [Day ${currentDay}] 音声スキップ: ${data.audio?.reason || '音声データなし'}`);
+      }
       
       // 画像更新
       if (data.imageUrl) {
@@ -389,10 +724,98 @@
       // ゲーム終了チェック
       if (data.gameOver) {
         showEnding(data.narrative);
+        
+        // エンディング音声（特別仕様）
+        if (data.audio && data.audio.data) {
+          setTimeout(() => {
+            playAudio(data.audio.data, 'ending');
+          }, 1000);
+        }
       }
       
       // Day別の背景色変更（緊張感演出）
       updateAtmosphere(currentDay);
+      
+      // 音声UI状態更新
+      updateAudioStatus(
+        audioEnabled ? '🎙️ AIVIS待機中' : '🔇 音声無効',
+        getEmotionByDay(currentDay)
+      );
+
+      // ゲーム状態更新（所持金、評判、役割など）
+      if (data.gameState) {
+        updateGameState(data.gameState);
+      }
+
+      // P0: パフォーマンス情報表示
+      if (data.performance) {
+        updatePerformanceInfo(data.performance);
+      }
+    }
+    
+    // ゲーム状態を更新する関数
+    function updateGameState(gameState) {
+      // 所持金更新
+      if (gameState.gold !== undefined) {
+        const goldDisplay = document.getElementById('gold-display');
+        if (goldDisplay) {
+          // 大きな数字を適切に表示（1億 = 100,000,000）
+          const formattedGold = gameState.gold >= 100000000 
+            ? `${(gameState.gold / 100000000).toFixed(1)}億G`
+            : gameState.gold >= 10000
+            ? `${(gameState.gold / 10000).toFixed(1)}万G`
+            : `${gameState.gold.toLocaleString()}G`;
+          goldDisplay.textContent = formattedGold;
+          
+          // 大金取得時のエフェクト
+          if (gameState.gold >= 10000000) {
+            goldDisplay.style.color = '#FFD700';
+            goldDisplay.style.textShadow = '0 0 10px #FFD700';
+            setTimeout(() => {
+              goldDisplay.style.color = '';
+              goldDisplay.style.textShadow = '';
+            }, 2000);
+          }
+        }
+      }
+      
+      // 評判更新
+      if (gameState.reputation !== undefined) {
+        const reputationDisplay = document.getElementById('reputation-display');
+        if (reputationDisplay) {
+          reputationDisplay.textContent = gameState.reputation;
+          
+          // 評判の色分け
+          if (gameState.reputation >= 80) {
+            reputationDisplay.style.color = '#00FF00';
+          } else if (gameState.reputation >= 60) {
+            reputationDisplay.style.color = '#90EE90';
+          } else if (gameState.reputation >= 40) {
+            reputationDisplay.style.color = '#FFFF00';
+          } else if (gameState.reputation >= 20) {
+            reputationDisplay.style.color = '#FFA500';
+          } else {
+            reputationDisplay.style.color = '#FF4444';
+          }
+        }
+      }
+      
+      // 役割更新
+      if (gameState.role) {
+        const roleDisplay = document.getElementById('role-display');
+        if (roleDisplay) {
+          roleDisplay.textContent = gameState.role;
+        }
+      }
+      
+      // その他の状態（レベル、アイテム数など）も追加可能
+      if (gameState.level !== undefined) {
+        // レベル表示があれば更新
+        const levelDisplay = document.getElementById('level-display');
+        if (levelDisplay) {
+          levelDisplay.textContent = `Lv.${gameState.level}`;
+        }
+      }
     }
     
     // タイプライター効果
@@ -482,6 +905,10 @@
     // キーボードショートカット（数字キーで選択肢を選択）
     document.addEventListener('keypress', (e) => {
       if (isProcessing) return;
+      
+      // 自由入力フィールドにフォーカスがある時はショートカットを無効化
+      const freeInput = document.getElementById('free-input');
+      if (document.activeElement === freeInput) return;
       
       const num = parseInt(e.key);
       if (num >= 1 && num <= 9) {

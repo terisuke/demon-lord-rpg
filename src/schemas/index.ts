@@ -2,7 +2,13 @@ import { z } from 'zod';
 
 // プレイヤー役割スキーマ
 export const PlayerRoleSchema = z.enum([
-  "hero", "merchant", "coward", "traitor", "villager", "sage", "mercenary"
+  'hero',
+  'merchant',
+  'coward',
+  'traitor',
+  'villager',
+  'sage',
+  'mercenary',
 ]);
 
 // プレイヤー統計スキーマ
@@ -20,7 +26,7 @@ export const PlayerStatsSchema = z.object({
 export const InventoryItemSchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: z.enum(["weapon", "item", "food", "information"]),
+  type: z.enum(['weapon', 'item', 'food', 'information']),
   value: z.number().min(0),
   description: z.string().optional(),
 });
@@ -47,7 +53,7 @@ export const GameStateSchema = z.object({
 
 // 選択肢の結果スキーマ
 export const ConsequenceEffectSchema = z.object({
-  type: z.enum(["stat", "item", "flag", "relationship", "location"]),
+  type: z.enum(['stat', 'item', 'flag', 'relationship', 'location']),
   target: z.string(),
   change: z.union([z.number(), z.string(), z.boolean()]),
 });
@@ -60,12 +66,14 @@ export const DelayedEffectSchema = ConsequenceEffectSchema.extend({
 export const ChoiceSchema = z.object({
   id: z.string(),
   text: z.string(),
-  requirements: z.object({
-    stats: PlayerStatsSchema.partial().optional(),
-    items: z.array(z.string()).optional(),
-    flags: z.array(z.string()).optional(),
-    role: z.array(PlayerRoleSchema).optional(),
-  }).optional(),
+  requirements: z
+    .object({
+      stats: PlayerStatsSchema.partial().optional(),
+      items: z.array(z.string()).optional(),
+      flags: z.array(z.string()).optional(),
+      role: z.array(PlayerRoleSchema).optional(),
+    })
+    .optional(),
   consequences: z.object({
     immediate: z.array(ConsequenceEffectSchema),
     delayed: z.array(DelayedEffectSchema).optional(),
@@ -76,7 +84,7 @@ export const ChoiceSchema = z.object({
 export const GameEventSchema = z.object({
   id: z.string(),
   day: z.number().int().min(1).max(30),
-  type: z.enum(["morning", "noon", "evening", "night"]),
+  type: z.enum(['morning', 'noon', 'evening', 'night']),
   title: z.string(),
   description: z.string(),
   choices: z.array(ChoiceSchema),
@@ -84,14 +92,14 @@ export const GameEventSchema = z.object({
 
 // エンディングタイプスキーマ
 export const EndingTypeSchema = z.enum([
-  "PERFECT_VICTORY",
-  "COSTLY_VICTORY", 
-  "TACTICAL_RETREAT",
-  "DEVASTATING_DEFEAT",
-  "ESCAPE_SUCCESS",
-  "BETRAYAL_SUCCESS",
-  "MERCHANT_SUCCESS",
-  "UNEXPECTED_PEACE"
+  'PERFECT_VICTORY',
+  'COSTLY_VICTORY',
+  'TACTICAL_RETREAT',
+  'DEVASTATING_DEFEAT',
+  'ESCAPE_SUCCESS',
+  'BETRAYAL_SUCCESS',
+  'MERCHANT_SUCCESS',
+  'UNEXPECTED_PEACE',
 ]);
 
 // コマンド入力スキーマ

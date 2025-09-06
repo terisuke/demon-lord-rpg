@@ -57,6 +57,38 @@ graph TB
 3. **型安全性**: TypeScriptとZodによる厳格な型管理
 4. **モジュラー設計**: 各コンポーネントの独立性と交換可能性
 
+### 1.3 ゲームエンジン実装
+
+プロジェクトは複数のゲーム実装アプローチをサポートする **UnifiedGameEngine** を使用：
+
+```typescript
+// src/game/UnifiedGameEngine.ts
+export class UnifiedGameEngine {
+  private gameMode: 'simple' | 'volt-agent' = 'simple';
+  
+  async startGame(options?: { demoMode?: boolean }): Promise<void> {
+    switch (this.gameMode) {
+      case 'simple':
+        // 直接的なAI統合、シンプルなアーキテクチャ
+        const simpleGame = new SimpleDemonLordRPG();
+        break;
+        
+      case 'volt-agent':
+        // Volt Agent フレームワーク、マルチエージェントシステム
+        const voltGame = new DemonLordRPG();
+        break;
+    }
+  }
+}
+```
+
+#### 実装比較
+
+| 実装方式 | 説明 | 状態 | 使用ケース |
+|---------|------|------|-----------|
+| **Simple** | Grok APIとの直接統合、基本的な画像生成機能 | ✅ 安定 | テスト、開発、デモ |
+| **Volt Agent** | 高度なマルチエージェントアーキテクチャ | ⚠️ 開発中 | 本格運用、高度な機能 |
+
 ## 2. エージェントアーキテクチャ
 
 ### 2.1 Supervisor Pattern

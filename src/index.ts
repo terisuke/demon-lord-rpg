@@ -1,51 +1,51 @@
 // src/index.ts - PdMのQUICK_START.md MVP版
-import { VoltAgent, Agent } from "@voltagent/core";
-import { VercelAIProvider } from "@voltagent/vercel-ai";
-import { xai } from "@ai-sdk/xai";
+import { VoltAgent, Agent } from '@voltagent/core';
+import { VercelAIProvider } from '@voltagent/vercel-ai';
+import { xai } from '@ai-sdk/xai';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-async function main() {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const mode = args[0] || 'volt';
+  const mode = args[0] || 'simple';
 
   if (mode === 'server' || mode === 'web') {
     // HTTPサーバーモード（フロントエンド付き）
-    console.log("🌐 HTTPサーバーモードを起動します...");
+    console.log('🌐 HTTPサーバーモードを起動します...');
     const { default: startServer } = await import('./server');
+    await startServer();
     return;
   }
 
-  // VoltAgentコンソールモード（デフォルト）
-  console.log("🤖 VoltAgentコンソールモードを起動します...");
+  // ゲームモード
+  console.log('🤖 ゲームモードを起動します...');
 
-  // シンプルなゲームマスターエージェント
-  const gameMasterAgent = new Agent({
-    name: "GameMaster",
-    instructions: `
-      あなたは30日後に魔王が襲来するRPGのゲームマスターです。
-      プレイヤーの行動に応じて物語を進めてください。
-      現在はDay 1から始まります。
-    `,
-    llm: new VercelAIProvider(),
-    model: xai("grok-3-mini"), // まずは安価なモデルでテスト
+  const UnifiedGameEngine = (await import('./game/UnifiedGameEngine')).default;
+  const gameEngine = new UnifiedGameEngine();
+
+  // コマンドライン引数でゲームモードを指定
+  if (args.includes('--volt-agent')) {
+    gameEngine.setGameMode('volt-agent');
+  } else {
+    gameEngine.setGameMode('simple');
+  }
+
+  // デモモードの設定
+  const demoMode = args.includes('--demo');
+
+  console.log('');
+  console.log('🎮 Available Game Modes:');
+  const modeInfo = gameEngine.getGameModeInfo();
+  Object.entries(modeInfo).forEach(([key, info]) => {
+    const indicator = gameEngine.getGameMode() === key ? '👉' : '  ';
+    console.log(`${indicator} ${info.name}: ${info.description}`);
+    console.log(`     Status: ${info.status}`);
   });
+  console.log('');
 
-  // Volt Agentサーバー起動
-  const voltAgent = new VoltAgent({
-    agents: {
-      gameMaster: gameMasterAgent,
-    },
-  });
-
-  console.log("🎮 ゲームサーバー起動完了");
-  console.log("VoltOpsコンソールでgameMasterエージェントと対話してください");
-  console.log("");
-  console.log("🌐 Web版を起動するには:");
-  console.log("   npm run dev server");
-  console.log("   または");
-  console.log("   npx tsx src/index.ts server");
+  // ゲーム開始
+  await gameEngine.startGame({ demoMode });
 }
 
 // エラーハンドリング
