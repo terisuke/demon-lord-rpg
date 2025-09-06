@@ -1,7 +1,7 @@
 // src/features/imageGeneration.ts
 export async function generateSceneImage(prompt: string, day: number): Promise<string | null> {
-  // Day 1, 10, 20, 30のみ画像生成
-  if (![1, 10, 20, 30].includes(day)) {
+  // 3日ごとに画像生成（Day 1, 4, 7, 10, 13, 16, 19, 22, 25, 28）
+  if (day !== 1 && day % 3 !== 1) {
     return null;
   }
 

@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Language**: TypeScript
 - **Database**: LibSQL (SQLite) for save data
 - **Communication**: Server-Sent Events for real-time updates
-- **Audio**: AIVIS Cloud API (optional, under development)
+- **Audio**: AIVIS Cloud API (fully implemented with dynamic voice synthesis)
 
 ### Multi-Agent Architecture (Supervisor Pattern)
 - **GameMaster Agent** (grok-4): L1 supervisor, handles complex reasoning and world state
@@ -64,17 +64,29 @@ npm run typecheck
 - **Temporary State**: Current location, weather, combat state, session data (userContext)
 
 ### Model Selection Strategy
-- `grok-4`: Complex narrative generation, strategic decisions
+- `grok-4`: Complex narrative generation, strategic decisions, AI state evaluation
 - `grok-3-mini`: Simple dialogue, cost-optimized interactions
 - `grok-code-fast-1`: Logic processing, rapid calculations
 - `grok-2-image-1212`: Visual content generation
+
+### AI-Driven State Evaluation System
+- **Technology**: Grok API with few-shot prompting for dynamic game state changes
+- **Implementation**: `GrokService.evaluateStateChanges()` in `/src/services/GrokService.ts`
+- **Input**: Player action, current game state, day number, optional narrative context
+- **Output**: Structured evaluation with reputation/gold changes, story flags, and reasoning
+- **Range Limits**: Reputation (-50 to +50), Gold (-1000 to +5000) per action
+- **Fallback**: Minor random changes if AI evaluation fails
+- **Integration**: Seamlessly integrated with `OptimizedGameLoop` parallel processing
 
 ## Core Game Mechanics
 
 - **30-Day Time System**: Each day = 1 turn with morning/noon/evening/night phases
 - **Role-Based Gameplay**: 7 roles (hero, merchant, coward, traitor, villager, sage, mercenary)
+- **AI-Driven State Evaluation**: Player actions evaluated by Grok API using few-shot prompting instead of hardcoded rules
+- **Dynamic Context Awareness**: Same action produces different results based on player role, current stats, and day progression
 - **Multiple Endings**: 8+ endings based on player preparation and choices
 - **Dynamic Difficulty**: Automatic adjustment based on player performance
+- **Real-time Audio**: AIVIS Cloud API generates contextual Japanese voice narration
 
 ## Project Structure
 
@@ -82,12 +94,17 @@ npm run typecheck
 demon-lord-rpg/
 ├── src/
 │   ├── agents/         # Agent implementations (GameMaster, NPC, etc.)
+│   ├── features/       # Audio narration, image generation
+│   ├── game/           # Game loops (GameLoop, OptimizedGameLoop)
+│   ├── services/       # External API integrations (GrokService, AIVISEnhancedService)
 │   ├── types/          # TypeScript type definitions
 │   ├── schemas/        # Zod validation schemas
 │   ├── utils/          # Utility functions
-│   ├── services/       # External API integrations
-│   └── index.ts        # Entry point
-├── public/             # Frontend assets
+│   ├── workflows/      # Multi-agent workflows
+│   ├── config/         # Configuration files
+│   ├── index.ts        # Volt Agent entry point
+│   └── server.ts       # Express web server entry point
+├── public/             # Frontend assets (HTML, CSS, JS)
 ├── docs/               # Comprehensive documentation
 ├── specs/              # Game design specifications
 └── tests/              # Test files

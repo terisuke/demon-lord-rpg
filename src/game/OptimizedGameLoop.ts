@@ -1,478 +1,430 @@
-// src/game/OptimizedGameLoop.ts - Performance optimized game loop with G/role/reputation features
-import { GameLoop } from './GameLoop';
-import { GrokService } from '../services/GrokService';
-import { AIVISEnhancedService } from '../services/AIVISEnhancedService';
-import { RealTimeSearchService } from '../services/RealTimeSearchService';
+// src/game/OptimizedGameLoop.ts - P0: Promise.all並列処理最適化
 import { generateSceneImage } from '../features/imageGeneration';
-import { GAME_CONFIG } from '../config/gameConfig';
-import type { GameState, PlayerRole, PlayerStats, EndingType } from '@/types';
+import { GrokService } from '../services/GrokService';
+import { realTimeSearchService } from '../services/RealTimeSearchService';
+import { aivisEnhanced } from '../services/AIVISEnhancedService';
+import { handleError } from '../utils/errorHandler';
 
 interface OptimizedGameResponse {
   day: number;
   narrative: string;
   imageUrl: string | null;
-  audioBuffer: ArrayBuffer | null;
   choices: string[];
   gameOver: boolean;
   specialEvent?: string;
-  searchResult?: any;
-  playerStats: PlayerStats;
-  reputationChange: number;
-  goldChange: number;
-  performanceMetrics: PerformanceMetrics;
-}
-
-interface PerformanceMetrics {
-  narrativeGenTime: number;
-  imageGenTime: number;
-  audioGenTime: number;
-  searchTime: number;
-  totalTime: number;
-  parallelOperations: number;
-}
-
-interface ActionEffects {
-  reputation: number;
-  gold: number;
-  strength?: number;
-  knowledge?: number;
-  health?: number;
-  flags: Record<string, boolean>;
-  risk?: 'low' | 'medium' | 'high';
-}
-
-export class OptimizedGameLoop extends GameLoop {
-  private aivis: AIVISEnhancedService;
-  private searchService: RealTimeSearchService;
-  private performanceHistory: PerformanceMetrics[] = [];
-  private actionHistory: string[] = [];
-  
-  // Advanced game state with detailed tracking
-  private enhancedGameState: GameState = {
-    currentDay: 1,
-    playerRole: 'hero',
-    playerName: 'プレイヤー',
-    location: '始まりの村アルファ',
-    playerStats: {
-      level: 1,
-      health: 100,
-      strength: 20,
-      knowledge: 20,
-      reputation: 0,
-      wealth: 100,
-      allies: []
-    },
-    inventory: [],
-    gameFlags: {},
-    npcRelationships: {}
+  searchEvent?: {
+    query: string;
+    results: string;
+    integration: string;
+    mood: string;
   };
+  audio?: {
+    data: string;
+    reason: string;
+  };
+  gameState?: {
+    gold: number;
+    reputation: number;
+    role: string;
+    level?: number;
+    inventory?: string[];
+    stats?: {
+      strength?: number;
+      intelligence?: number;
+      charisma?: number;
+    };
+  };
+  performance: {
+    totalTime: number;
+    parallelTime: number;
+    serialTime: number;
+    tasksCompleted: number;
+    tasksSkipped: number;
+  };
+}
 
-  // Comprehensive action effects system
-  private readonly actionEffectsMap: Record<string, ActionEffects> = {
-    // Positive reputation actions
-    '村長と相談': { reputation: 10, gold: 0, knowledge: 5, flags: { talked_to_elder: true }, risk: 'low' },
-    '村人を助ける': { reputation: 15, gold: -5, strength: 2, flags: { helped_villagers: true }, risk: 'low' },
-    '情報を集める': { reputation: 5, gold: -2, knowledge: 10, flags: { gathered_info: true }, risk: 'low' },
-    '武器を探す': { reputation: 0, gold: -10, strength: 5, flags: { searched_weapons: true }, risk: 'medium' },
-    '訓練を積む': { reputation: 5, gold: -5, strength: 8, flags: { trained: true }, risk: 'low' },
-    '仲間を探す': { reputation: 8, gold: -15, flags: { sought_allies: true }, risk: 'medium' },
-    
-    // Negative reputation actions (traitor/coward paths)
-    '物資を盗む': { reputation: -20, gold: 30, flags: { committed_theft: true }, risk: 'high' },
-    '嘘の情報を流す': { reputation: -15, gold: 10, knowledge: 5, flags: { spread_misinformation: true }, risk: 'high' },
-    '村から逃げる': { reputation: -25, gold: -20, flags: { attempted_escape: true }, risk: 'medium' },
-    '魔王と内通する': { reputation: -50, gold: 100, flags: { betrayed_village: true }, risk: 'high' },
-    '賭博をする': { reputation: -10, gold: 20, flags: { gambled: true }, risk: 'high' }, // Can lose money too
-    '密売を行う': { reputation: -15, gold: 50, flags: { black_market: true }, risk: 'high' },
-    
-    // Merchant specific actions
-    '商品を売る': { reputation: 5, gold: 25, flags: { trading_active: true }, risk: 'low' },
-    '価格を操作する': { reputation: -8, gold: 40, flags: { price_manipulation: true }, risk: 'medium' },
-    '独占を図る': { reputation: -12, gold: 60, flags: { monopoly_attempt: true }, risk: 'high' },
-    
-    // Role-specific bonus actions
-    '魔法を研究': { reputation: 2, gold: -8, knowledge: 15, flags: { magic_research: true }, risk: 'low' },
-    '傭兵を雇う': { reputation: -5, gold: -80, strength: 12, flags: { hired_mercenaries: true }, risk: 'medium' },
-    '秘密を売る': { reputation: -18, gold: 45, knowledge: 8, flags: { sold_secrets: true }, risk: 'high' }
+export class OptimizedGameLoop {
+  private currentDay: number = 1;
+  private maxDays: number = 30;
+  private gameState: any = {
+    playerRole: 'hero',
+    reputation: 0,
+    gold: 100,
+    storyFlags: {},
+    history: [],
   };
 
   constructor() {
-    super();
-    this.aivis = new AIVISEnhancedService();
-    this.searchService = new RealTimeSearchService();
-    
-    console.log("🚀 OptimizedGameLoop initialized with parallel processing");
+    console.log('🚀 OptimizedGameLoop初期化 - Promise.all並列処理有効');
   }
 
   /**
-   * Process player action with parallel optimization and comprehensive effects
+   * P0機能: Promise.allによる完全並列処理
    */
-  async processPlayerAction(action: string): Promise<OptimizedGameResponse> {
+  async processPlayerActionOptimized(action: string): Promise<OptimizedGameResponse> {
     const startTime = Date.now();
-    console.log(`[Day ${this.enhancedGameState.currentDay}] Processing: ${action}`);
+    console.log(`⚡ [Day ${this.currentDay}] 並列処理開始: "${action}"`);
 
-    // Track action history for search service
-    this.actionHistory.push(action);
-    if (this.actionHistory.length > 10) {
-      this.actionHistory.shift(); // Keep only recent 10 actions
-    }
+    // 行動履歴を記録
+    this.gameState.history.push({
+      day: this.currentDay,
+      action: action,
+    });
 
-    // Calculate action effects before processing
-    const effects = this.calculateActionEffects(action);
-    const oldStats = { ...this.enhancedGameState.playerStats };
+    try {
+      // フェーズ1: 並列処理可能なタスク（Promise.all）
+      const parallelStartTime = Date.now();
 
-    // Parallel processing using Promise.all for performance optimization
-    const [
-      specialEvent,
-      narrative,
-      searchResult
-    ] = await Promise.all([
-      // Task 1: Check special events
-      GrokService.checkForSpecialEvent(this.enhancedGameState.currentDay, this.enhancedGameState),
-      
-      // Task 2: Generate narrative (most expensive operation)
-      this.generateEnhancedNarrative(action, effects),
-      
-      // Task 3: Trigger search if applicable
-      this.searchService.shouldTriggerSearchOnDay(this.enhancedGameState.currentDay) 
-        ? this.searchService.triggerSearchOnDay(
-            this.enhancedGameState.currentDay, 
-            this.enhancedGameState, 
-            this.actionHistory
-          )
-        : null
-    ]);
+      const [specialEvent, searchEvent, baseNarrative, imageUrl, gameStateUpdate] =
+        await Promise.all([
+          // 特別イベントチェック
+          this.safeAsync(
+            () => GrokService.checkForSpecialEvent(this.currentDay, this.gameState),
+            null,
+            '特別イベント'
+          ),
 
-    const narrativeTime = Date.now();
+          // リアルタイム検索（並列実行）
+          this.safeAsync(
+            () => realTimeSearchService.triggerSearchOnDay(this.currentDay, action, this.gameState),
+            null,
+            'リアルタイム検索'
+          ),
 
-    // Second parallel batch for media generation
-    const [
-      imageUrl,
-      audioBuffer,
-      choices
-    ] = await Promise.all([
-      // Task 4: Generate image for important days
-      GAME_CONFIG.IMAGE_GENERATION_DAYS.includes(this.enhancedGameState.currentDay)
-        ? generateSceneImage(narrative, this.enhancedGameState.currentDay)
-        : null,
-      
-      // Task 5: Generate audio narration
-      this.aivis.synthesizeNarration(
-        narrative, 
-        'narrator', 
-        this.enhancedGameState
-      ),
-      
-      // Task 6: Generate choices
-      this.generateEnhancedChoices(narrative, effects)
-    ]);
+          // 基本ナレーション生成
+          this.safeAsync(
+            () => GrokService.generateNarrative(this.currentDay, action, this.gameState),
+            `Day ${this.currentDay}の物語を紡いでいます...`,
+            'ナレーション生成'
+          ),
 
-    const mediaTime = Date.now();
+          // 画像生成（条件付き）
+          this.safeAsync(
+            () =>
+              this.shouldGenerateImage(this.currentDay)
+                ? generateSceneImage(`Day ${this.currentDay} scene`, this.currentDay)
+                : null,
+            null,
+            '画像生成'
+          ),
 
-    // Apply action effects to game state
-    this.applyActionEffects(action, effects);
-    this.advanceDay();
+          // ゲーム状態更新（非同期処理化）
+          this.safeAsync(
+            () => Promise.resolve(this.updateGameStateAsync(action)),
+            null,
+            'ゲーム状態更新'
+          ),
+        ]);
 
-    const endTime = Date.now();
+      const parallelTime = Date.now() - parallelStartTime;
 
-    // Performance metrics
-    const metrics: PerformanceMetrics = {
-      narrativeGenTime: narrativeTime - startTime,
-      imageGenTime: imageUrl ? (mediaTime - narrativeTime) / 3 : 0,
-      audioGenTime: audioBuffer ? (mediaTime - narrativeTime) / 3 : 0,
-      searchTime: searchResult ? (narrativeTime - startTime) / 3 : 0,
-      totalTime: endTime - startTime,
-      parallelOperations: 6
-    };
+      // フェーズ2: 順次処理が必要なタスク
+      const serialStartTime = Date.now();
 
-    this.performanceHistory.push(metrics);
+      // ナレーション統合（検索結果と特別イベントを含める）
+      const fullNarrative = this.integrateNarrative(baseNarrative, specialEvent, searchEvent);
 
-    const reputationChange = this.enhancedGameState.playerStats.reputation - oldStats.reputation;
-    const goldChange = this.enhancedGameState.playerStats.wealth - oldStats.wealth;
+      // フェーズ3: ナレーション依存タスクを並列実行
+      const [choices, audioResult] = await Promise.all([
+        // 選択肢生成
+        this.safeAsync(
+          () => GrokService.generateChoices(this.currentDay, fullNarrative, this.gameState),
+          ['探索する', '休息する', '情報を集める'],
+          '選択肢生成'
+        ),
 
-    console.log(`⚡ Processed in ${metrics.totalTime}ms (${metrics.parallelOperations} parallel ops)`);
-    console.log(`📊 Rep: ${reputationChange >= 0 ? '+' : ''}${reputationChange}, Gold: ${goldChange >= 0 ? '+' : ''}${goldChange}G`);
+        // 音声生成
+        this.safeAsync(
+          async () => {
+            const result = await aivisEnhanced.autoNarrate(fullNarrative, this.currentDay);
+            return result.shouldPlay && result.audioData
+              ? { data: result.audioData, reason: result.reason }
+              : null;
+          },
+          null,
+          '音声生成'
+        ),
+      ]);
 
-    return {
-      day: this.enhancedGameState.currentDay - 1,
-      narrative: this.combineNarrativeWithSearch(narrative, specialEvent, searchResult),
-      imageUrl,
-      audioBuffer,
-      choices,
-      gameOver: this.enhancedGameState.currentDay > GAME_CONFIG.MAX_DAYS,
-      specialEvent: specialEvent || undefined,
-      searchResult,
-      playerStats: { ...this.enhancedGameState.playerStats },
-      reputationChange,
-      goldChange,
-      performanceMetrics: metrics
-    };
-  }
+      const serialTime = Date.now() - serialStartTime;
 
-  /**
-   * Calculate comprehensive action effects including risks
-   */
-  private calculateActionEffects(action: string): ActionEffects {
-    // Direct match first
-    if (this.actionEffectsMap[action]) {
-      return { ...this.actionEffectsMap[action] };
-    }
+      // 日を進める
+      this.advanceDay();
 
-    // Pattern matching for flexible actions
-    const effects: ActionEffects = { reputation: 0, gold: 0, flags: {}, risk: 'low' };
+      const totalTime = Date.now() - startTime;
 
-    // Positive keywords
-    if (action.includes('助け') || action.includes('支援')) {
-      effects.reputation = 12;
-      effects.gold = -8;
-      effects.flags.helped_someone = true;
-    } else if (action.includes('学ぶ') || action.includes('研究')) {
-      effects.knowledge = 8;
-      effects.gold = -5;
-      effects.flags.studied = true;
-    } else if (action.includes('鍛える') || action.includes('練習')) {
-      effects.strength = 6;
-      effects.gold = -3;
-      effects.flags.trained = true;
-    }
+      // 統計情報
+      const tasksCompleted = [
+        specialEvent,
+        searchEvent,
+        baseNarrative,
+        imageUrl,
+        gameStateUpdate,
+        fullNarrative,
+        choices,
+        audioResult,
+      ].filter((task) => task !== null && task !== undefined).length;
 
-    // Negative keywords  
-    else if (action.includes('騙') || action.includes('詐欺')) {
-      effects.reputation = -25;
-      effects.gold = 35;
-      effects.flags.fraud = true;
-      effects.risk = 'high';
-    } else if (action.includes('盗') || action.includes('強奪')) {
-      effects.reputation = -20;
-      effects.gold = Math.random() > 0.5 ? 40 : -10; // Risk of getting caught
-      effects.flags.theft_attempt = true;
-      effects.risk = 'high';
-    } else if (action.includes('脅') || action.includes('恐喝')) {
-      effects.reputation = -30;
-      effects.gold = 25;
-      effects.flags.extortion = true;
-      effects.risk = 'high';
-    }
+      const tasksSkipped = 8 - tasksCompleted;
 
-    // Role-based modifiers
-    const roleMultiplier = this.getRoleMultiplier();
-    effects.reputation = Math.floor(effects.reputation * roleMultiplier.reputation);
-    effects.gold = Math.floor(effects.gold * roleMultiplier.wealth);
+      console.log(
+        `✅ [Day ${this.currentDay - 1}] 並列処理完了: ${totalTime}ms (並列: ${parallelTime}ms, 順次: ${serialTime}ms)`
+      );
+      console.log(`   完了タスク: ${tasksCompleted}, スキップ: ${tasksSkipped}`);
 
-    return effects;
-  }
+      return {
+        day: this.currentDay - 1,
+        narrative: fullNarrative,
+        imageUrl,
+        choices,
+        gameOver: this.currentDay > this.maxDays,
+        specialEvent,
+        searchEvent: searchEvent
+          ? {
+              query: searchEvent.searchQuery,
+              results: searchEvent.searchResults,
+              integration: searchEvent.gameIntegration,
+              mood: searchEvent.mood,
+            }
+          : undefined,
+        audio: audioResult,
+        gameState: {
+          gold: this.gameState.gold,
+          reputation: this.gameState.reputation,
+          role: this.gameState.playerRole,
+          level: Math.floor(this.gameState.reputation / 10) + 1,
+          inventory: Object.keys(this.gameState.storyFlags).filter(
+            (flag) =>
+              flag.includes('found_') || flag.includes('weapon') || flag.includes('treasure')
+          ),
+          stats: {
+            strength: Math.floor(this.gameState.reputation / 15) + 5,
+            intelligence: Math.floor(this.gameState.reputation / 12) + 5,
+            charisma: Math.floor(this.gameState.reputation / 8) + 5,
+          },
+        },
+        performance: {
+          totalTime,
+          parallelTime,
+          serialTime,
+          tasksCompleted,
+          tasksSkipped,
+        },
+      };
+    } catch (error) {
+      const totalTime = Date.now() - startTime;
+      handleError(error, 'OptimizedGameLoop.processPlayerActionOptimized');
 
-  /**
-   * Get role-based multipliers for different stats
-   */
-  private getRoleMultiplier() {
-    const multipliers = {
-      hero: { reputation: 1.5, wealth: 0.8, strength: 1.3 },
-      merchant: { reputation: 0.7, wealth: 1.8, knowledge: 1.2 },
-      coward: { reputation: 0.9, wealth: 1.0, strength: 0.6 },
-      traitor: { reputation: 0.3, wealth: 1.4, knowledge: 1.3 },
-      sage: { reputation: 1.2, wealth: 0.6, knowledge: 1.8 },
-      mercenary: { reputation: 0.8, wealth: 1.3, strength: 1.5 },
-      villager: { reputation: 1.0, wealth: 1.0, strength: 1.0 }
-    };
-
-    return multipliers[this.enhancedGameState.playerRole] || multipliers.villager;
-  }
-
-  /**
-   * Apply calculated effects to game state with risk processing
-   */
-  private applyActionEffects(action: string, effects: ActionEffects): void {
-    const stats = this.enhancedGameState.playerStats;
-    
-    // Apply basic stat changes
-    stats.reputation += effects.reputation;
-    stats.wealth += effects.gold;
-    stats.strength = Math.min(100, (stats.strength || 0) + (effects.strength || 0));
-    stats.knowledge = Math.min(100, (stats.knowledge || 0) + (effects.knowledge || 0));
-    stats.health = Math.max(0, Math.min(100, (stats.health || 100) + (effects.health || 0)));
-
-    // Process risk-based consequences
-    if (effects.risk === 'high' && Math.random() < 0.3) {
-      // 30% chance of additional negative consequences for high-risk actions
-      stats.reputation -= 10;
-      stats.wealth -= 20;
-      this.enhancedGameState.gameFlags.caught_in_act = true;
-      console.log("⚠️ 高リスク行動により追加の悪影響が発生！");
-    } else if (effects.risk === 'medium' && Math.random() < 0.15) {
-      // 15% chance for medium risk
-      stats.reputation -= 5;
-      console.log("⚠️ 中リスク行動により軽微な悪影響が発生");
-    }
-
-    // Apply flags
-    Object.assign(this.enhancedGameState.gameFlags, effects.flags);
-
-    // Reputation boundaries
-    stats.reputation = Math.max(-100, Math.min(100, stats.reputation));
-    stats.wealth = Math.max(0, stats.wealth);
-
-    // Level progression based on total growth
-    const totalGrowth = (stats.strength || 0) + (stats.knowledge || 0) + Math.abs(stats.reputation);
-    const newLevel = Math.floor(totalGrowth / 50) + 1;
-    if (newLevel > stats.level) {
-      stats.level = newLevel;
-      console.log(`🎉 レベルアップ！ Lv.${stats.level}`);
+      // エラー時のフォールバック応答
+      return {
+        day: this.currentDay,
+        narrative: 'システムエラーが発生しましたが、物語は続きます...',
+        imageUrl: null,
+        choices: ['続ける'],
+        gameOver: false,
+        gameState: {
+          gold: this.gameState.gold,
+          reputation: this.gameState.reputation,
+          role: this.gameState.playerRole,
+        },
+        performance: {
+          totalTime,
+          parallelTime: 0,
+          serialTime: totalTime,
+          tasksCompleted: 0,
+          tasksSkipped: 8,
+        },
+      };
     }
   }
 
   /**
-   * Generate enhanced narrative with context awareness
+   * 安全な非同期実行ラッパー（エラー時フォールバック付き）
    */
-  private async generateEnhancedNarrative(action: string, effects: ActionEffects): Promise<string> {
-    // Enhanced prompt with effect information
-    const effectsContext = `
-予想される結果: 評判${effects.reputation >= 0 ? '+' : ''}${effects.reputation}, 金${effects.gold >= 0 ? '+' : ''}${effects.gold}G, リスク: ${effects.risk}
-フラグ: ${Object.keys(effects.flags).join(', ') || 'なし'}`;
-
-    const enhancedGameState = {
-      ...this.enhancedGameState,
-      effectsContext
-    };
-
-    return await GrokService.generateNarrative(
-      this.enhancedGameState.currentDay,
-      action,
-      enhancedGameState
-    );
+  private async safeAsync<T>(
+    asyncFn: () => Promise<T>,
+    fallbackValue: T,
+    taskName: string
+  ): Promise<T> {
+    try {
+      const result = await asyncFn();
+      console.log(`✅ ${taskName}: 成功`);
+      return result;
+    } catch (error) {
+      console.warn(`⚠️ ${taskName}: エラー (フォールバック使用)`, error instanceof Error ? error.message : String(error));
+      return fallbackValue;
+    }
   }
 
   /**
-   * Generate enhanced choices based on current state and effects
+   * ナレーション統合処理
    */
-  private async generateEnhancedChoices(narrative: string, lastEffects: ActionEffects): Promise<string[]> {
-    const choices = await GrokService.generateChoices(
-      this.enhancedGameState.currentDay,
-      narrative,
-      this.enhancedGameState
-    );
+  private integrateNarrative(
+    baseNarrative: string,
+    specialEvent?: string | null,
+    searchEvent?: any
+  ): string {
+    let fullNarrative = baseNarrative;
 
-    // Add role-specific choices if reputation is very low (traitor path)
-    if (this.enhancedGameState.playerStats.reputation < -30) {
-      const darkChoices = ['裏切りを企てる', '秘密を売る', '夜逃げを計画'];
-      choices.push(darkChoices[Math.floor(Math.random() * darkChoices.length)]);
-    }
-
-    // Add wealth-based choices for merchants
-    if (this.enhancedGameState.playerRole === 'merchant' && this.enhancedGameState.playerStats.wealth > 200) {
-      choices.push('大規模投資を行う');
-    }
-
-    return choices.slice(0, 4); // Keep maximum 4 choices
-  }
-
-  /**
-   * Combine narrative with search results seamlessly
-   */
-  private combineNarrativeWithSearch(narrative: string, specialEvent?: string | null, searchResult?: any): string {
-    let combined = narrative;
-    
+    // 特別イベント統合
     if (specialEvent) {
-      combined = `【特別イベント】\n${specialEvent}\n\n${combined}`;
+      fullNarrative = `【特別イベント】\n${specialEvent}\n\n${fullNarrative}`;
     }
-    
-    if (searchResult?.gameIntegration) {
-      combined += `\n\n${searchResult.gameIntegration}`;
+
+    // 検索結果統合
+    if (searchEvent && searchEvent.gameIntegration) {
+      fullNarrative += `\n\n【探索結果】\n${searchEvent.gameIntegration}`;
+      console.log(`🔍 検索統合: ${searchEvent.mood}`);
     }
-    
-    return combined;
+
+    return fullNarrative;
   }
 
   /**
-   * Get performance analytics
+   * 画像生成判定（重要な日のみ）
    */
-  getPerformanceAnalytics(): {
-    averageResponseTime: number;
-    totalParallelOps: number;
-    fastestResponse: number;
-    slowestResponse: number;
-  } {
-    if (this.performanceHistory.length === 0) {
-      return { averageResponseTime: 0, totalParallelOps: 0, fastestResponse: 0, slowestResponse: 0 };
-    }
+  private shouldGenerateImage(day: number): boolean {
+    // より頻繁な画像生成：重要な場面や定期的に生成
+    // 毎日生成するとコストが高いため、3日に1回 + 重要日
+    const regularDays = day % 3 === 1; // Day 1, 4, 7, 10, 13, 16, 19, 22, 25, 28
+    const importantDays = [1, 5, 10, 15, 20, 25, 30].includes(day);
 
-    const times = this.performanceHistory.map(m => m.totalTime);
-    const totalOps = this.performanceHistory.reduce((sum, m) => sum + m.parallelOperations, 0);
-
-    return {
-      averageResponseTime: times.reduce((sum, time) => sum + time, 0) / times.length,
-      totalParallelOps: totalOps,
-      fastestResponse: Math.min(...times),
-      slowestResponse: Math.max(...times)
-    };
+    return regularDays || importantDays;
   }
 
   /**
-   * Advanced ending determination with comprehensive state analysis
+   * ゲーム状態更新（非同期化）
    */
-  protected determineEnding(): EndingType {
-    const { playerStats, gameFlags, playerRole } = this.enhancedGameState;
-    const { reputation, wealth, strength, knowledge } = playerStats;
-
-    // Perfect Victory: High stats across the board
-    if (reputation > 70 && strength > 40 && knowledge > 35 && gameFlags.found_weapon) {
-      return "PERFECT_VICTORY";
-    }
-    
-    // Costly Victory: Won but with sacrifices
-    if ((reputation > 30 && strength > 30) || (gameFlags.hired_mercenaries && wealth > 100)) {
-      return "COSTLY_VICTORY";
-    }
-    
-    // Betrayal Success: Traitor path completion
-    if (reputation < -40 && gameFlags.betrayed_village && wealth > 150) {
-      return "BETRAYAL_SUCCESS";
-    }
-    
-    // Merchant Success: Economic victory
-    if (playerRole === 'merchant' && wealth > 500 && reputation > 0) {
-      return "MERCHANT_SUCCESS";
-    }
-    
-    // Escape Success: Successful coward
-    if (gameFlags.attempted_escape && wealth > 50 && !gameFlags.caught_in_act) {
-      return "ESCAPE_SUCCESS";
-    }
-    
-    // Tactical Retreat: Strategic withdrawal
-    if (reputation > 0 && knowledge > 30 && gameFlags.gathered_info) {
-      return "TACTICAL_RETREAT";
-    }
-    
-    // Unexpected Peace: Diplomatic solution
-    if (reputation > 50 && knowledge > 40 && playerRole === 'sage') {
-      return "UNEXPECTED_PEACE";
-    }
-    
-    // Default: Devastating defeat
-    return "DEVASTATING_DEFEAT";
-  }
-
   /**
-   * Get current enhanced game state
+   * AI駆動のゲーム状態更新（Few-shot prompting使用）
    */
-  get enhancedGameStateData(): GameState {
-    return { ...this.enhancedGameState };
-  }
+  private async updateGameStateAsync(action: string): Promise<void> {
+    try {
+      // AI評価を実行
+      const evaluation = await GrokService.evaluateStateChanges(
+        action,
+        this.gameState,
+        this.currentDay
+      );
 
-  /**
-   * Batch process multiple actions (useful for AI simulations)
-   */
-  async batchProcessActions(actions: string[]): Promise<OptimizedGameResponse[]> {
-    const results: OptimizedGameResponse[] = [];
-    
-    for (const action of actions) {
-      const result = await this.processPlayerAction(action);
-      results.push(result);
+      // AI評価結果を適用
+      this.gameState.reputation += evaluation.reputation;
+      this.gameState.gold += evaluation.gold;
       
-      if (result.gameOver) break;
+      // storyFlagsを統合
+      Object.assign(this.gameState.storyFlags, evaluation.storyFlags);
+
+      console.log(`🧠 AI評価完了: ${evaluation.reasoning}`);
+      console.log(`📊 状態変更: 評判${evaluation.reputation > 0 ? '+' : ''}${evaluation.reputation}, 金${evaluation.gold > 0 ? '+' : ''}${evaluation.gold}`);
+      
+      // 既存のフラグロジックは残しつつ、AI評価を優先
+      this.applyDayBasedFlags();
+      
+    } catch (error) {
+      console.warn('⚠️ AI状態評価エラー、フォールバック処理を実行');
+      
+      // フォールバック: 軽微なランダム変化
+      const minorChange = Math.floor(Math.random() * 10) - 5;
+      this.gameState.reputation += minorChange;
+      console.log(`🎲 フォールバック変化: 評判${minorChange > 0 ? '+' : ''}${minorChange}`);
+    }
+  }
+
+  /**
+   * Day進行に応じたフラグ設定（AI評価と併用）
+   */
+  private applyDayBasedFlags(): void {
+    // Day 20以降は緊張度が上がる
+    if (this.currentDay > 20) {
+      this.gameState.storyFlags['high_tension'] = true;
     }
     
+    // Day 25以降は最終段階
+    if (this.currentDay >= 25) {
+      this.gameState.storyFlags['final_phase'] = true;
+    }
+  }
+
+  /**
+   * Day進行処理
+   */
+  private advanceDay(): void {
+    this.currentDay++;
+    console.log(`📅 Day ${this.currentDay}/${this.maxDays}`);
+
+    // 終盤の警告
+    if (this.currentDay === 25) {
+      console.log('⚠️ あと5日で魔王が襲来します！');
+    } else if (this.currentDay === 29) {
+      console.log('🚨 明日、魔王が襲来します！');
+    } else if (this.currentDay === 30) {
+      console.log('💀 魔王襲来の日！');
+    }
+  }
+
+  /**
+   * バッチ処理デモ（複数プレイヤー対応の準備）
+   */
+  async processBatchActions(
+    actions: Array<{ playerId: string; action: string }>
+  ): Promise<Map<string, OptimizedGameResponse>> {
+    console.log(`🔄 バッチ処理開始: ${actions.length}件`);
+
+    const results = new Map<string, OptimizedGameResponse>();
+
+    // 全プレイヤーの処理を並列実行
+    const promises = actions.map(async ({ playerId, action }) => {
+      const result = await this.processPlayerActionOptimized(action);
+      results.set(playerId, result);
+      return { playerId, result };
+    });
+
+    await Promise.all(promises);
+
+    console.log(`✅ バッチ処理完了: ${results.size}件`);
     return results;
   }
+
+  // ゲッター
+  get currentDayNumber(): number {
+    return this.currentDay;
+  }
+
+  get gameStateData(): any {
+    return this.gameState;
+  }
+
+  /**
+   * パフォーマンス統計取得
+   */
+  getPerformanceStats(): {
+    currentDay: number;
+    gameState: any;
+    optimization: string;
+  } {
+    return {
+      currentDay: this.currentDay,
+      gameState: this.gameState,
+      optimization: 'Promise.all並列処理有効',
+    };
+  }
+
+  // セーブ・ロード機能
+  saveGame(): string {
+    return JSON.stringify({
+      day: this.currentDay,
+      state: this.gameState,
+      optimization: true,
+    });
+  }
+
+  loadGame(saveData: string): void {
+    const data = JSON.parse(saveData);
+    this.currentDay = data.day;
+    this.gameState = data.state;
+    console.log('📖 最適化ゲームループデータロード完了');
+  }
 }
+
+// シングルトンインスタンス
+export const optimizedGameLoop = new OptimizedGameLoop();

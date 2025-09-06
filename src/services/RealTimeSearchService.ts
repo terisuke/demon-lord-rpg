@@ -346,3 +346,6 @@ ${searchResults.map((result, i) =>
     return [...this.searchTriggerDays];
   }
 }
+
+// Export singleton instance
+export const realTimeSearchService = new RealTimeSearchService();

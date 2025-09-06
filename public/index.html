@@ -353,11 +353,20 @@
       }
     }
     
+    // 音声制御用の変数
+    let audioEnabled = true;
+    let currentAudio = null;
+
     // ゲーム画面を更新
     function updateGame(data) {
       // 日付更新
       currentDay = data.day;
       document.getElementById('day-counter').textContent = `Day ${currentDay} / 30`;
+      
+      // ゲーム状態更新（新機能）
+      if (data.gameState) {
+        updateGameStats(data.gameState);
+      }
       
       // 特別イベント表示
       if (data.specialEvent) {
@@ -372,6 +381,11 @@
       const narrativeEl = document.getElementById('narrative');
       narrativeEl.textContent = '';
       typeWriter(data.narrative, narrativeEl);
+      
+      // 🎵 音声再生処理
+      if (data.audioData && audioEnabled) {
+        playAudio(data.audioData);
+      }
       
       // 画像更新
       if (data.imageUrl) {
@@ -393,6 +407,131 @@
       
       // Day別の背景色変更（緊張感演出）
       updateAtmosphere(currentDay);
+    }
+
+    // 🎵 音声再生関数
+    function playAudio(base64AudioData) {
+      try {
+        // 前の音声を停止
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio = null;
+        }
+        
+        console.log('🎵 Playing audio from AIVIS...');
+        
+        // Base64データからAudioオブジェクトを作成
+        const audio = new Audio(base64AudioData);
+        currentAudio = audio;
+        
+        // 音声再生イベント
+        audio.oncanplaythrough = () => {
+          console.log('✅ Audio ready to play');
+          audio.play().catch(error => {
+            console.warn('⚠️ Auto-play blocked by browser:', error.message);
+            showAudioPrompt();
+          });
+        };
+        
+        audio.onended = () => {
+          console.log('🎵 Audio playback finished');
+          currentAudio = null;
+        };
+        
+        audio.onerror = (error) => {
+          console.error('❌ Audio playback error:', error);
+          currentAudio = null;
+        };
+        
+      } catch (error) {
+        console.error('❌ Audio setup error:', error);
+      }
+    }
+
+    // ブラウザの自動再生ブロック時のプロンプト
+    function showAudioPrompt() {
+      if (!document.getElementById('audio-prompt')) {
+        const prompt = document.createElement('div');
+        prompt.id = 'audio-prompt';
+        prompt.innerHTML = `
+          <div style="position: fixed; top: 20px; right: 20px; background: rgba(0,0,0,0.8); color: white; padding: 15px; border-radius: 10px; z-index: 1000;">
+            <div>🔊 音声を再生するにはクリック</div>
+            <button onclick="enableAudioAndPlay()" style="margin-top: 10px; padding: 5px 15px;">音声を有効にする</button>
+            <button onclick="disableAudio()" style="margin-top: 10px; margin-left: 5px; padding: 5px 15px;">音声をオフにする</button>
+          </div>
+        `;
+        document.body.appendChild(prompt);
+      }
+    }
+
+    // 音声を有効化して再生
+    function enableAudioAndPlay() {
+      if (currentAudio) {
+        currentAudio.play().catch(console.error);
+      }
+      const prompt = document.getElementById('audio-prompt');
+      if (prompt) prompt.remove();
+    }
+
+    // 音声を無効化
+    function disableAudio() {
+      audioEnabled = false;
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+      }
+      const prompt = document.getElementById('audio-prompt');
+      if (prompt) prompt.remove();
+      console.log('🔇 Audio disabled by user');
+    }
+
+    // ゲーム状態の表示を更新
+    function updateGameStats(gameState) {
+      console.log('📊 Updating game stats:', gameState);
+      
+      // 役割更新
+      if (gameState.role && gameState.role !== document.getElementById('role-display').textContent) {
+        document.getElementById('role-display').textContent = gameState.role;
+        console.log(`🎭 Role updated: ${gameState.role}`);
+      }
+      
+      // 評判更新
+      if (gameState.reputation !== undefined) {
+        const currentRep = parseInt(document.getElementById('reputation-display').textContent) || 0;
+        if (gameState.reputation !== currentRep) {
+          document.getElementById('reputation-display').textContent = gameState.reputation;
+          console.log(`⭐ Reputation updated: ${currentRep} → ${gameState.reputation}`);
+          
+          // 評判変化のアニメーション
+          const repElement = document.getElementById('reputation-display');
+          repElement.style.animation = 'pulse 0.5s';
+          setTimeout(() => {
+            repElement.style.animation = '';
+          }, 500);
+        }
+      }
+      
+      // 所持金更新
+      if (gameState.gold !== undefined) {
+        const currentGold = parseInt(document.getElementById('gold-display').textContent.replace('G', '')) || 100;
+        if (gameState.gold !== currentGold) {
+          document.getElementById('gold-display').textContent = `${gameState.gold}G`;
+          console.log(`💰 Gold updated: ${currentGold}G → ${gameState.gold}G`);
+          
+          // 所持金変化のアニメーション
+          const goldElement = document.getElementById('gold-display');
+          goldElement.style.animation = 'pulse 0.5s';
+          setTimeout(() => {
+            goldElement.style.animation = '';
+          }, 500);
+        }
+      }
+      
+      // レベル表示（新機能）
+      if (gameState.level) {
+        const dayCounter = document.getElementById('day-counter');
+        dayCounter.innerHTML = `Day ${currentDay} / 30<br><small>Lv.${gameState.level}</small>`;
+      }
     }
     
     // タイプライター効果
