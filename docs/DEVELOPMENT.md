@@ -154,6 +154,68 @@ async function executeCommand(command: string) {
 }
 ```
 
+### 2.4 コード品質とリンティング
+
+#### ESLint設定
+
+プロジェクトではTypeScript専用のESLint設定を使用しています：
+
+```javascript
+// eslint.config.js - ESLint v9+ フラット設定形式
+export default [
+  js.configs.recommended,
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    languageOptions: {
+      parser: typescriptParser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        project: './tsconfig.json',
+      },
+    },
+    plugins: {
+      '@typescript-eslint': typescript,
+      prettier: prettier,
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/explicit-function-return-type': 'warn',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      'prettier/prettier': 'error',
+    },
+  },
+];
+```
+
+#### 開発コマンド
+
+```bash
+# リンティング実行
+npm run lint
+
+# TypeScript型チェック
+npm run typecheck
+
+# ビルド
+npm run build
+```
+
+#### エディタ統合
+
+VS Code での推奨設定：
+
+```json
+// .vscode/settings.json
+{
+  "eslint.experimental.useFlatConfig": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "typescript.preferences.includePackageJsonAutoImports": "off"
+}
+```
+
 ## 3. エージェント開発ガイド
 
 ### 3.1 新規エージェントの作成手順

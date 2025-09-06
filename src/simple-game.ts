@@ -35,15 +35,23 @@ export class SimpleDemonLordRPG {
 
     this.demoMode = demoMode;
     this.inputIndex = 0;
+    this.speechEnabled = false; // Initialize speechEnabled property
     this.demoInputs = [
-      'デモテスター',  // プレイヤー名
-      '1',           // 英雄を選択
-      '1',           // Day 1: 村長に相談
-      '2',           // Day 2: 商人で装備購入
-      '3',           // Day 3: 賢者に助言
-      '1',           // 各特別イベントで選択肢1
-      '2', '1', '3', '4', '5', '6', // 残りの日の行動
-      '1', '2', '1'  // 追加の選択肢用
+      'デモテスター', // プレイヤー名
+      '1', // 英雄を選択
+      '1', // Day 1: 村長に相談
+      '2', // Day 2: 商人で装備購入
+      '3', // Day 3: 賢者に助言
+      '1', // 各特別イベントで選択肢1
+      '2',
+      '1',
+      '3',
+      '4',
+      '5',
+      '6', // 残りの日の行動
+      '1',
+      '2',
+      '1', // 追加の選択肢用
     ];
 
     // xAI Grokモデルの設定
@@ -58,12 +66,12 @@ export class SimpleDemonLordRPG {
       reputation: 50,
       wealth: 100,
       prophecyHeard: false,
-      gameEnded: false
+      gameEnded: false,
     };
 
     this.rl = readline.createInterface({
       input: process.stdin,
-      output: process.stdout
+      output: process.stdout,
     });
 
     const modeText = demoMode ? 'デモ自動実行版' : 'シンプル版';
@@ -76,13 +84,12 @@ export class SimpleDemonLordRPG {
     try {
       // プレイヤー名と役割の設定
       await this.setupPlayer();
-      
+
       // Day 1: 予言の告知
       await this.day1Opening();
-      
+
       // メインゲームループ
       await this.gameLoop();
-      
     } catch (error) {
       console.error('❌ ゲーム実行中にエラーが発生:', error);
     } finally {
@@ -92,22 +99,24 @@ export class SimpleDemonLordRPG {
 
   private async setupPlayer(): Promise<void> {
     console.log('\n🎭 キャラクター設定');
-    
+
     this.gameState.playerName = await this.askQuestion('あなたの名前を入力してください: ');
-    
+
     console.log('\n役割を選択してください:');
     console.log('1. 英雄 (高い戦闘力)');
-    console.log('2. 商人 (豊富な資金)');  
+    console.log('2. 商人 (豊富な資金)');
     console.log('3. 臆病者 (高い体力)');
     console.log('4. 村人 (バランス型)');
     console.log('5. 賢者 (豊富な知識)');
     console.log('6. 傭兵 (戦闘のプロ)');
-    
+
     const roleChoice = await this.askQuestion('選択 (1-6): ');
     const roles = ['', '英雄', '商人', '臆病者', '村人', '賢者', '傭兵'];
     this.gameState.playerRole = roles[parseInt(roleChoice)] || '村人';
-    
-    console.log(`\n✅ ${this.gameState.playerName}（${this.gameState.playerRole}）として冒険を開始します！`);
+
+    console.log(
+      `\n✅ ${this.gameState.playerName}（${this.gameState.playerRole}）として冒険を開始します！`
+    );
   }
 
   private async day1Opening(): Promise<void> {
@@ -137,15 +146,15 @@ JSON形式で回答してください：
     try {
       const response = await generateText({
         model: this.gameMasterModel,
-        messages: [{ role: 'user', content: openingPrompt }]
+        messages: [{ role: 'user', content: openingPrompt }],
       });
 
       const result = this.parseJSONResponse(response.text);
-      
+
       console.log('\n📖 ' + result.narrative);
       console.log('\n🔮 予言: ' + result.prophecy);
       console.log('\n👥 村の反応: ' + result.villageReaction);
-      
+
       this.gameState.prophecyHeard = true;
 
       // Day 1の重要場面の画像生成
@@ -153,30 +162,42 @@ JSON形式で回答してください：
       await this.generateSceneImage(
         `Fantasy village scene: Elder announcing demon lord prophecy to ${this.gameState.playerRole} character, medieval village setting, dramatic lighting`
       );
-
     } catch (error) {
       console.error('Day 1オープニング処理エラー:', error);
-      console.log('📖 村長エルダー・モーガンが重大な発表をします。「30日後、この村に魔王が襲来します。皆さん、準備を整えてください。」');
+      console.log(
+        '📖 村長エルダー・モーガンが重大な発表をします。「30日後、この村に魔王が襲来します。皆さん、準備を整えてください。」'
+      );
       this.gameState.prophecyHeard = true;
     }
   }
 
   private async gameLoop(): Promise<void> {
     const maxDay = this.demoMode ? 5 : 30; // デモモードは5日まで
-    while (this.gameState.currentDay <= maxDay && !this.gameState.gameEnded && this.gameState.health > 0) {
+    while (
+      this.gameState.currentDay <= maxDay &&
+      !this.gameState.gameEnded &&
+      this.gameState.health > 0
+    ) {
       console.log(`\n📅 Day ${this.gameState.currentDay} / 30`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log(`💚 体力: ${this.gameState.health}/100 | ⭐ 評判: ${this.gameState.reputation}/100 | 💰 所持金: ${this.gameState.wealth}G`);
+      console.log(
+        `💚 体力: ${this.gameState.health}/100 | ⭐ 評判: ${this.gameState.reputation}/100 | 💰 所持金: ${this.gameState.wealth}G`
+      );
       console.log(`魔王襲来まで残り ${30 - this.gameState.currentDay + 1} 日`);
-      
+
       await this.dayAction();
-      
+
       // 特別な日の処理 - デモモードでは3日目に発生
-      if ((this.demoMode && this.gameState.currentDay === 3) || 
-          (!this.demoMode && (this.gameState.currentDay === 10 || this.gameState.currentDay === 20 || this.gameState.currentDay === 30))) {
+      if (
+        (this.demoMode && this.gameState.currentDay === 3) ||
+        (!this.demoMode &&
+          (this.gameState.currentDay === 10 ||
+            this.gameState.currentDay === 20 ||
+            this.gameState.currentDay === 30))
+      ) {
         await this.specialDayEvent();
       }
-      
+
       this.gameState.currentDay++;
     }
 
@@ -198,17 +219,17 @@ JSON形式で回答してください：
 
   private async processAction(choice: number): Promise<void> {
     const actions = [
-      '', 
+      '',
       '村長エルダー・モーガンに相談する',
-      '商人グロムで装備を購入する', 
+      '商人グロムで装備を購入する',
       '賢者エララに助言を求める',
       '村の防衛準備を手伝う',
       '他の村人と情報交換する',
-      '休息して体力回復する'
+      '休息して体力回復する',
     ];
 
     const actionText = actions[choice] || '様子を見る';
-    
+
     const prompt = `
 あなたはファンタジーRPGのゲームマスターです。
 
@@ -233,25 +254,34 @@ JSON形式で回答してください：
     try {
       const response = await generateText({
         model: this.gameMasterModel,
-        messages: [{ role: 'user', content: prompt }]
+        messages: [{ role: 'user', content: prompt }],
       });
 
       const result = this.parseJSONResponse(response.text);
-      
+
       console.log('\n📖 ' + result.narrative);
-      
+
       // ステータス更新
-      this.gameState.health = Math.max(0, Math.min(100, this.gameState.health + (result.healthChange || 0)));
-      this.gameState.reputation = Math.max(0, Math.min(100, this.gameState.reputation + (result.reputationChange || 0)));
+      this.gameState.health = Math.max(
+        0,
+        Math.min(100, this.gameState.health + (result.healthChange || 0))
+      );
+      this.gameState.reputation = Math.max(
+        0,
+        Math.min(100, this.gameState.reputation + (result.reputationChange || 0))
+      );
       this.gameState.wealth = Math.max(0, this.gameState.wealth + (result.wealthChange || 0));
-      
+
       // 変化を表示
-      this.showStatusChanges(result.healthChange || 0, result.reputationChange || 0, result.wealthChange || 0);
-      
+      this.showStatusChanges(
+        result.healthChange || 0,
+        result.reputationChange || 0,
+        result.wealthChange || 0
+      );
+
       if (result.specialEvent) {
         console.log('\n✨ 特別なイベント: ' + result.specialEvent);
       }
-
     } catch (error) {
       console.error('行動処理エラー:', error);
       console.log(`📖 ${actionText}を実行しました。`);
@@ -260,7 +290,7 @@ JSON形式で回答してください：
 
   private async specialDayEvent(): Promise<void> {
     console.log(`\n🌟 Day ${this.gameState.currentDay} - 重要な節目`);
-    
+
     const prompt = `
 Day ${this.gameState.currentDay}の特別イベントを作成してください。
 魔王襲来の緊迫感が高まる重要な転換点として描写してください。
@@ -278,23 +308,23 @@ JSON形式で回答：
     try {
       const response = await generateText({
         model: this.gameMasterModel,
-        messages: [{ role: 'user', content: prompt }]
+        messages: [{ role: 'user', content: prompt }],
       });
 
       const result = this.parseJSONResponse(response.text);
-      
+
       console.log('\n📜 ' + result.eventTitle);
       console.log('📖 ' + result.eventDescription);
-      
+
       if (result.choices && result.choices.length > 0) {
         console.log('\n💭 選択肢:');
         result.choices.forEach((choice: string, index: number) => {
           console.log(`${index + 1}. ${choice}`);
         });
-        
+
         const playerChoice = await this.askQuestion('選択: ');
         const choiceIndex = parseInt(playerChoice) - 1;
-        
+
         if (choiceIndex >= 0 && choiceIndex < result.choices.length) {
           console.log(`✅ 「${result.choices[choiceIndex]}」を選択しました。`);
         }
@@ -305,7 +335,6 @@ JSON形式で回答：
       await this.generateSceneImage(
         `Fantasy RPG dramatic scene: Day ${this.gameState.currentDay} special event, ${result.eventTitle}, medieval fantasy setting, epic atmosphere`
       );
-
     } catch (error) {
       console.error('特別イベント処理エラー:', error);
       console.log(`📖 Day ${this.gameState.currentDay}、村に重要な変化が起こりました。`);
@@ -315,15 +344,14 @@ JSON形式で回答：
   private async generateSceneImage(prompt: string): Promise<void> {
     try {
       console.log(`🎨 画像生成中: "${prompt.substring(0, 50)}..."`);
-      
+
       const { image } = await generateImage({
         model: this.imageGenerationModel,
-        prompt: `High-quality fantasy RPG scene: ${prompt}. Style: detailed digital art, fantasy game artwork, dramatic lighting.`
+        prompt: `High-quality fantasy RPG scene: ${prompt}. Style: detailed digital art, fantasy game artwork, dramatic lighting.`,
       });
-      
+
       console.log('✅ 画像生成完了！（ゲーム内では画像が表示されます）');
-      console.log(`🖼️ 画像URL: ${image.url || 'Generated successfully'}`);
-      
+      console.log(`🖼️ 画像生成: ${image ? 'Generated successfully' : 'Failed to generate'}`);
     } catch (error) {
       console.error('画像生成エラー:', error);
       console.log('⚠️ 画像生成に失敗しましたが、ゲームを続行します。');
@@ -335,12 +363,11 @@ JSON形式で回答：
 
     try {
       console.log(`🗣️ 音声合成中: ${character}の声で「${text.substring(0, 30)}...」`);
-      
+
       // AIVIS音声合成の実装（モック）
       // 実際の実装では、音声合成APIまたはTTSライブラリを使用
       console.log('🔊 音声再生完了！（実際のゲームでは音声が再生されます）');
       console.log(`🎭 キャラクター: ${character}`);
-      
     } catch (error) {
       console.error('音声合成エラー:', error);
       console.log('⚠️ 音声合成に失敗しましたが、ゲームを続行します。');
@@ -373,21 +400,20 @@ JSON形式で回答：
     try {
       const response = await generateText({
         model: this.gameMasterModel,
-        messages: [{ role: 'user', content: endingPrompt }]
+        messages: [{ role: 'user', content: endingPrompt }],
       });
 
       const result = this.parseJSONResponse(response.text);
-      
+
       console.log(`\n🎭 ${result.endingTitle}`);
       console.log('📖 ' + result.endingDescription);
       console.log('\n💬 ' + result.finalMessage);
-      
+
       // エンディング画像生成
       console.log('\n🎨 エンディングシーンを画像で生成中...');
       await this.generateSceneImage(
         `Fantasy RPG ending scene: ${result.endingType} ending, demon lord confrontation, ${result.endingTitle}, epic final battle, dramatic conclusion`
       );
-
     } catch (error) {
       console.error('エンディング処理エラー:', error);
       console.log('📖 30日後、魔王との最終決戦の時が訪れました...');
@@ -399,7 +425,8 @@ JSON形式で回答：
   private parseJSONResponse(response: string): any {
     try {
       // JSONコードブロックの抽出を試行
-      const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) || response.match(/\{[\s\S]*\}/);
+      const jsonMatch =
+        response.match(/```json\s*([\s\S]*?)\s*```/) || response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[1] || jsonMatch[0]);
       }
@@ -410,23 +437,27 @@ JSON形式で回答：
         narrative: response.substring(0, 200) + '...',
         healthChange: 0,
         reputationChange: 0,
-        wealthChange: 0
+        wealthChange: 0,
       };
     }
   }
 
-  private showStatusChanges(healthChange: number, reputationChange: number, wealthChange: number): void {
+  private showStatusChanges(
+    healthChange: number,
+    reputationChange: number,
+    wealthChange: number
+  ): void {
     const changes: string[] = [];
-    
+
     if (healthChange > 0) changes.push(`💚 体力 +${healthChange}`);
     else if (healthChange < 0) changes.push(`💔 体力 ${healthChange}`);
-    
+
     if (reputationChange > 0) changes.push(`⭐ 評判 +${reputationChange}`);
     else if (reputationChange < 0) changes.push(`📉 評判 ${reputationChange}`);
-    
+
     if (wealthChange > 0) changes.push(`💰 所持金 +${wealthChange}G`);
     else if (wealthChange < 0) changes.push(`💸 所持金 ${wealthChange}G`);
-    
+
     if (changes.length > 0) {
       console.log('📊 変化: ' + changes.join(' | '));
     }
@@ -439,7 +470,7 @@ JSON形式で回答：
       console.log(question + answer);
       return Promise.resolve(answer);
     }
-    
+
     return new Promise((resolve) => {
       this.rl.question(question, (answer) => {
         resolve(answer.trim());
