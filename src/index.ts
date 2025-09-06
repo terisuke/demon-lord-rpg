@@ -13,7 +13,7 @@ async function main() {
   if (mode === 'server' || mode === 'web') {
     // HTTPサーバーモード（フロントエンド付き）
     console.log("🌐 HTTPサーバーモードを起動します...");
-    const { default: startServer } = await import('./server');
+    await import('./server');
     return;
   }
 
