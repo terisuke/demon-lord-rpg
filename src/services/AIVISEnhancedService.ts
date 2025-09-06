@@ -4,7 +4,6 @@ import { handleError } from '../utils/errorHandler';
 
 // 環境変数を確実に読み込み
 dotenv.config();
-
 export interface AIVISConfig {
   voice: 'female_calm_jp' | 'male_dramatic_jp' | 'elder_jp' | 'demon_deep_jp';
   speed: number; // 0.8-1.2 based on day tension

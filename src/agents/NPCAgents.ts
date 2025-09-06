@@ -56,32 +56,39 @@ export class ElderMorganAgent extends Agent<VercelAIProvider> {
       model: xai('grok-3-mini'), // コスト最適化
       tools: [
         {
+          id: 'issue_village_decree',
           name: 'issue_village_decree',
           description: '村の布告を発布する',
           parameters: z.object({
             decree: z.string().describe('布告の内容'),
-            urgency: z.enum(['low', 'medium', 'high']).describe('緊急度')
+            urgency: z.enum(['low', 'medium', 'high']).describe('緊急度'),
           }),
-          execute: async (params: { decree: string; urgency: 'low' | 'medium' | 'high' }) => {
+          execute: async (params: {
+            decree: string;
+            urgency: 'low' | 'medium' | 'high';
+          }): Promise<string> => {
             return `村長令を発布しました: ${params.decree} (緊急度: ${params.urgency})`;
-          }
+          },
         },
         {
+          id: 'consult_village_records',
           name: 'consult_village_records',
           description: '村の記録を調査する',
           parameters: z.object({
-            topic: z.string().describe('調査するトピック')
+            topic: z.string().describe('調査するトピック'),
           }),
-          execute: async (params: { topic: string }) => {
+          execute: async (params: { topic: string }): Promise<string> => {
             const records: Record<string, string> = {
-              'demon_lord': '50年前の魔王襲来では村の半数が犠牲になった。勇者カレンが魔王を封印した。',
-              'defense': '村には古い見張り塔と地下避難所がある。武器は限られている。',
-              'prophecy': '賢者エララの予言書に「黒き翼が再び舞う時、選ばれし者が道を決める」とある。'
+              demon_lord:
+                '50年前の魔王襲来では村の半数が犠牲になった。勇者カレンが魔王を封印した。',
+              defense: '村には古い見張り塔と地下避難所がある。武器は限られている。',
+              prophecy:
+                '賢者エララの予言書に「黒き翼が再び舞う時、選ばれし者が道を決める」とある。',
             };
             return records[params.topic] || '該当する記録は見つかりませんでした。';
-          }
-        }
-      ]
+          },
+        },
+      ],
     });
   }
 }
@@ -133,13 +140,13 @@ export class MerchantGromAgent extends Agent<VercelAIProvider> {
 - Day 21-30: 3倍（需要急増）
 
 ## 対応方針
-- 英雄役: 武器を安く提供、質の良いものを推奨
+- 英雄役: 武器を安く提供、質の良いものを推薦
 - 商人役: 仲間として特別価格で取引
-- 臆病者役: 防護用品を重点的に推奨
+- 臆病者役: 防護用品を重点的に推薦
 - 裏切り者役: 警戒しつつも商売は継続
 - 村人役: 近所付き合いとして親切に
 - 賢者役: 知識と引き換えに貴重品を提示
-- 傭兵役: プロとして良い装備を推奨
+- 傭兵役: プロとして良い装備を推薦
 
 常にJSON形式で応答し、具体的な商品や価格、アドバイスを含めてください。
       `,
@@ -147,44 +154,49 @@ export class MerchantGromAgent extends Agent<VercelAIProvider> {
       model: xai('grok-3-mini'), // コスト最適化
       tools: [
         {
+          id: 'check_inventory',
           name: 'check_inventory',
           description: '在庫を確認する',
           parameters: z.object({
-            item: z.string().describe('確認したいアイテム名')
+            item: z.string().describe('確認したいアイテム名'),
           }),
-          execute: async (params: { item: string }) => {
+          execute: async (params: { item: string }): Promise<string> => {
             const inventory: Record<string, { stock: number; price: number; quality: string }> = {
-              'sword': { stock: 5, price: 100, quality: 'good' },
-              'shield': { stock: 3, price: 80, quality: 'excellent' },
-              'armor': { stock: 2, price: 200, quality: 'good' },
-              'bow': { stock: 4, price: 60, quality: 'fair' },
-              'potion': { stock: 10, price: 25, quality: 'good' }
+              sword: { stock: 5, price: 100, quality: 'good' },
+              shield: { stock: 3, price: 80, quality: 'excellent' },
+              armor: { stock: 2, price: 200, quality: 'good' },
+              bow: { stock: 4, price: 60, quality: 'fair' },
+              potion: { stock: 10, price: 25, quality: 'good' },
             };
-            
+
             const item = inventory[params.item.toLowerCase()];
-            return item ? 
-              `${params.item}: 在庫${item.stock}個、価格${item.price}G、品質${item.quality}` :
-              `申し訳ないが、${params.item}は在庫切れやで`;
-          }
+            return item
+              ? `${params.item}: 在庫${item.stock}個、価格${item.price}G、品質${item.quality}`
+              : `申し訳ないが、${params.item}は在庫切れやで`;
+          },
         },
         {
+          id: 'craft_item',
           name: 'craft_item',
           description: 'アイテムを製作する',
           parameters: z.object({
             item: z.string().describe('製作するアイテム'),
-            quality: z.enum(['basic', 'good', 'excellent']).describe('品質レベル')
+            quality: z.enum(['basic', 'good', 'excellent']).describe('品質レベル'),
           }),
-          execute: async (params) => {
+          execute: async (params: {
+            item: string;
+            quality: 'basic' | 'good' | 'excellent';
+          }): Promise<string> => {
             const craftTime = {
-              'basic': '2時間',
-              'good': '半日', 
-              'excellent': '1日'
+              basic: '2時間',
+              good: '半日',
+              excellent: '1日',
             };
-            
+
             return `${params.item}（${params.quality}品質）の製作を開始するで。完成まで${craftTime[params.quality]}かかるな。`;
-          }
-        }
-      ]
+          },
+        },
+      ],
     });
   }
 }
@@ -240,44 +252,53 @@ export class ElaraSageAgent extends Agent<VercelAIProvider> {
 
 常にJSON形式で応答し、魔法的な知識や予言的な洞察を含めてください。
       `,
-      llm: new VercelAIProvider(), 
+      llm: new VercelAIProvider(),
       model: xai('grok-3-mini'), // コスト最適化
       tools: [
         {
+          id: 'cast_divination',
           name: 'cast_divination',
           description: '占術を行う',
           parameters: z.object({
             question: z.string().describe('占いたい内容'),
-            type: z.enum(['near_future', 'danger', 'success_chance']).describe('占いの種類')
+            type: z.enum(['near_future', 'danger', 'success_chance']).describe('占いの種類'),
           }),
-          execute: async (params) => {
+          execute: async (params: {
+            question: string;
+            type: 'near_future' | 'danger' | 'success_chance';
+          }): Promise<string> => {
             const divinations = {
-              'near_future': '星々は変化の兆しを告げています。慎重な行動が吉となるでしょう。',
-              'danger': '暗雲が立ち込めています。警戒を怠らず、仲間を信じることが肝要です。',
-              'success_chance': '運命は貴方の意志にかかっています。準備を整えれば道は開けるでしょう。'
+              near_future: '星々は変化の兆しを告げています。慎重な行動が吉となるでしょう。',
+              danger: '暗雲が立ち込めています。警戒を怠らず、仲間を信じることが肝要です。',
+              success_chance:
+                '運命は貴方の意志にかかっています。準備を整えれば道は開けるでしょう。',
             };
-            
+
             return `占術の結果: ${divinations[params.type]}`;
-          }
+          },
         },
         {
+          id: 'research_ancient_lore',
           name: 'research_ancient_lore',
           description: '古代知識を研究する',
           parameters: z.object({
-            topic: z.string().describe('研究するトピック')
+            topic: z.string().describe('研究するトピック'),
           }),
-          execute: async (params) => {
-            const lore = {
-              'demon_lord': '魔王は1000年ごとに蘇る古代の邪悪。真の封印には4つの聖なる石が必要。',
-              'ancient_magic': '失われた魔法の多くは、純粋な心と強い意志によってのみ発動する。',
-              'prophecy': '予言書には「異なる道を歩む者が一つとなる時、新たな運命が紡がれる」とあります。'
+          execute: async (params: { topic: string }): Promise<string> => {
+            const lore: Record<string, string> = {
+              demon_lord: '魔王は1000年ごとに蘇る古代の邪悪。真の封印には4つの聖なる石が必要。',
+              ancient_magic: '失われた魔法の多くは、純粋な心と強い意志によってのみ発動する。',
+              prophecy:
+                '予言書には「異なる道を歩む者が一つとなる時、新たな運命が紡がれる」とあります。',
             };
-            
-            return lore[params.topic as keyof typeof lore] || 
-              '該当する古代知識は見つかりませんが、更なる研究が必要かもしれません。';
-          }
-        }
-      ]
+
+            return (
+              lore[params.topic] ||
+              '該当する古代知識は見つかりませんが、更なる研究が必要かもしれません。'
+            );
+          },
+        },
+      ],
     });
   }
 }

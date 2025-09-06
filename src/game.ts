@@ -35,28 +35,32 @@ export class DemonLordRPG {
     this.gameMaster = new GameMasterAgent({
       Elder_Morgan: elderMorgan,
       Merchant_Grom: merchantGrom,
-      Elara_Sage: elaraSage
+      Elara_Sage: elaraSage,
     });
-    
+
     // npcAgentsオブジェクトを設定
     this.npcAgents = {
       gameMaster: this.gameMaster,
       elderMorgan,
       merchantGrom,
-      elaraSage
+      elaraSage,
     };
-    
+
     // ワークフローマネージャー（インスタンス化）
     this.workflowManager = new GameWorkflowManager(this.npcAgents);
-    
+
     // コンソール入力用のインターフェース
     this.rl = readline.createInterface({
       input: process.stdin,
-      output: process.stdout
+      output: process.stdout,
     });
 
     console.log('🏰 Volt Agent Supervisor/Sub-agentシステムが初期化されました');
-    console.log(`📋 登録Agents: GameMaster(Supervisor) + ${Object.keys(this.npcAgents).filter(k => k !== 'gameMaster').join(', ')}`);
+    console.log(
+      `📋 登録Agents: GameMaster(Supervisor) + ${Object.keys(this.npcAgents)
+        .filter((k) => k !== 'gameMaster')
+        .join(', ')}`
+    );
   }
 
   /**
@@ -86,17 +90,17 @@ export class DemonLordRPG {
       this.currentGameState = await this.gameMaster.startNewGame(playerName.trim(), playerRole);
 
       console.log('🌟 Day 1ワークフローを実行中...');
-      
+
       // Day 1ワークフローを実行
       try {
         const day1Result = await this.workflowManager.runDay1Start(
-          playerName.trim(), 
-          playerRole, 
+          playerName.trim(),
+          playerRole,
           this.currentGameState
         );
 
         console.log('✅ ワークフロー完了');
-        
+
         // ワークフロー結果を反映
         if (day1Result.updatedGameState) {
           this.currentGameState = day1Result.updatedGameState;
@@ -109,20 +113,18 @@ export class DemonLordRPG {
         // Day 1のオープニングイベントを生成
         const day1Event = await this.gameMaster.generateDay1Opening(this.currentGameState);
         await this.playEvent(day1Event);
-        
+
         // メインゲームループ
         await this.gameLoop();
-
       } catch (error) {
         console.error('❌ Day1ワークフロー実行中にエラーが発生:', error);
         console.log('フォールバックモードでゲームを継続します...');
-        
+
         // フォールバック: 通常のDay1イベント
         const day1Event = await this.gameMaster.generateDay1Opening(this.currentGameState);
         await this.playEvent(day1Event);
         await this.gameLoop();
       }
-
     } catch (error) {
       console.error('❌ ゲーム開始中にエラーが発生しました:', error);
     }
@@ -141,8 +143,10 @@ export class DemonLordRPG {
         console.log(`⭐ 評判: ${this.currentGameState.playerStats.reputation}`);
         console.log('');
 
-        const playerInput = await this.askQuestion('何をしますか？ (行動を自由に入力してください | help でヘルプ): ');
-        
+        const playerInput = await this.askQuestion(
+          '何をしますか？ (行動を自由に入力してください | help でヘルプ): '
+        );
+
         if (playerInput.toLowerCase() === 'quit' || playerInput.toLowerCase() === 'exit') {
           console.log('ゲームを終了します...');
           break;
@@ -189,14 +193,14 @@ export class DemonLordRPG {
             workflowResult.choices.forEach((choice: any, index: number) => {
               console.log(`${index + 1}. ${choice.text}`);
             });
-            
+
             const choiceInput = await this.askQuestion('選択 (数字): ');
             const choiceIndex = parseInt(choiceInput) - 1;
-            
+
             if (choiceIndex >= 0 && choiceIndex < workflowResult.choices.length) {
               const selectedChoice = workflowResult.choices[choiceIndex];
               console.log(`✅ 「${selectedChoice.text}」を選択しました`);
-              
+
               // 選択肢の結果を適用
               if (selectedChoice.consequences?.immediate) {
                 this.applyConsequences(selectedChoice.consequences.immediate);
@@ -206,32 +210,37 @@ export class DemonLordRPG {
 
           // 状態変更を適用
           if (workflowResult.stateChanges) {
-            this.currentGameState = this.applyStateChangesToGameState(this.currentGameState!, workflowResult.stateChanges);
+            this.currentGameState = this.applyStateChangesToGameState(
+              this.currentGameState!,
+              workflowResult.stateChanges
+            );
           }
-
         } catch (error) {
           console.error('❌ ワークフロー処理中にエラーが発生:', error);
           console.log('フォールバックモードで処理します...');
-          
+
           // フォールバック: 従来のGameMaster処理
-          const result = await this.gameMaster.processPlayerAction(this.currentGameState!, playerInput);
+          const result = await this.gameMaster.processPlayerAction(
+            this.currentGameState!,
+            playerInput
+          );
           console.log('');
           console.log('📖 ' + result.narrative);
           console.log('');
           this.currentGameState = result.updatedGameState;
         }
-        
+
         // 1日が終了したかチェック（簡易実装）
         // TODO: より詳細な時間進行システムを実装
-        if (Math.random() > 0.7) { // 30%の確率で日が進む
+        if (Math.random() > 0.7) {
+          // 30%の確率で日が進む
           this.currentGameState.currentDay += 1;
-          
+
           if (this.currentGameState.currentDay > 30) {
             await this.endGame();
             break;
           }
         }
-
       } catch (error) {
         console.error('❌ ゲームループ中にエラーが発生しました:', error);
         console.log('もう一度お試しください。');
@@ -261,7 +270,7 @@ export class DemonLordRPG {
       if (choiceIndex >= 0 && choiceIndex < event.choices.length) {
         const selectedChoice = event.choices[choiceIndex];
         console.log(`✅ 「${selectedChoice.text}」を選択しました`);
-        
+
         // 選択肢の結果を適用
         if (selectedChoice.consequences && selectedChoice.consequences.immediate) {
           this.applyConsequences(selectedChoice.consequences.immediate);
@@ -284,8 +293,11 @@ export class DemonLordRPG {
         case 'stat':
           if (consequence.target in this.currentGameState.playerStats) {
             const currentValue = (this.currentGameState.playerStats as any)[consequence.target];
-            (this.currentGameState.playerStats as any)[consequence.target] = currentValue + consequence.change;
-            console.log(`📊 ${consequence.target} が ${consequence.change > 0 ? '+' : ''}${consequence.change} 変化しました`);
+            (this.currentGameState.playerStats as any)[consequence.target] =
+              currentValue + consequence.change;
+            console.log(
+              `📊 ${consequence.target} が ${consequence.change > 0 ? '+' : ''}${consequence.change} 変化しました`
+            );
           }
           break;
         case 'flag':
@@ -310,15 +322,15 @@ export class DemonLordRPG {
     console.log('7. 傭兵 - 戦闘を得意とし、報酬で動く');
 
     const choice = await this.askQuestion('選択してください (1-7): ');
-    
+
     const roleMap: Record<string, PlayerRole> = {
       '1': 'hero',
-      '2': 'merchant', 
+      '2': 'merchant',
       '3': 'coward',
       '4': 'traitor',
       '5': 'villager',
       '6': 'sage',
-      '7': 'mercenary'
+      '7': 'mercenary',
     };
 
     return roleMap[choice] || 'villager';
@@ -329,7 +341,7 @@ export class DemonLordRPG {
    */
   private showStatus(): void {
     if (!this.currentGameState) return;
-    
+
     console.log('');
     console.log('📊 === ステータス ===');
     console.log(`名前: ${this.currentGameState.playerName}`);
@@ -360,7 +372,7 @@ export class DemonLordRPG {
     console.log('');
     console.log('🎊 ゲーム終了！');
     console.log('（完全なエンディング判定は今後実装予定）');
-    
+
     this.rl.close();
   }
 
@@ -369,11 +381,11 @@ export class DemonLordRPG {
    */
   private getLocationName(location: string): string {
     const locationNames: Record<string, string> = {
-      'village_center': '村の中心',
-      'blacksmith': '鍛冶屋',
-      'tavern': '宿屋',
-      'forest': '森',
-      'market': '市場'
+      village_center: '村の中心',
+      blacksmith: '鍛冶屋',
+      tavern: '宿屋',
+      forest: '森',
+      market: '市場',
     };
     return locationNames[location] || location;
   }
@@ -383,13 +395,13 @@ export class DemonLordRPG {
    */
   private getRoleName(role: PlayerRole): string {
     const roleNames: Record<PlayerRole, string> = {
-      'hero': '英雄',
-      'merchant': '商人',
-      'coward': '臆病者',
-      'traitor': '裏切り者',
-      'villager': '村人',
-      'sage': '賢者',
-      'mercenary': '傭兵'
+      hero: '英雄',
+      merchant: '商人',
+      coward: '臆病者',
+      traitor: '裏切り者',
+      villager: '村人',
+      sage: '賢者',
+      mercenary: '傭兵',
     };
     return roleNames[role];
   }
@@ -399,7 +411,7 @@ export class DemonLordRPG {
    */
   private async handleSpecialCommands(input: string): Promise<{ narrative: string } | null> {
     const command = input.toLowerCase();
-    
+
     if (command.includes('trade') || command.includes('shop') || command.includes('buy')) {
       try {
         const tradeResult = await this.workflowManager.runTrade(
@@ -415,8 +427,13 @@ export class DemonLordRPG {
         return { narrative: 'グロムは忙しそうで、後で来てほしいと言います。' };
       }
     }
-    
-    if (command.includes('magic') || command.includes('prophecy') || command.includes('elara') || command.includes('sage')) {
+
+    if (
+      command.includes('magic') ||
+      command.includes('prophecy') ||
+      command.includes('elara') ||
+      command.includes('sage')
+    ) {
       try {
         const consultResult = await this.workflowManager.runMagicConsultation(
           this.currentGameState!.playerName,
@@ -430,23 +447,27 @@ export class DemonLordRPG {
       }
     }
 
-    if (command.includes('elder') || command.includes('morgan') || command.includes('village chief')) {
+    if (
+      command.includes('elder') ||
+      command.includes('morgan') ||
+      command.includes('village chief')
+    ) {
       try {
         // Elder Morganとの直接対話
         const npc = this.npcAgents['Elder_Morgan'];
         const response = await npc.generateText([
           {
             role: 'user',
-            content: `プレイヤー「${this.currentGameState!.playerName}」（役割: ${this.currentGameState!.playerRole}）がDay ${this.currentGameState!.currentDay}にあなたを訪れました。プレイヤーは「${input}」と言いました。村長として適切に応答してください。`
-          }
+            content: `プレイヤー「${this.currentGameState!.playerName}」（役割: ${this.currentGameState!.playerRole}）がDay ${this.currentGameState!.currentDay}にあなたを訪れました。プレイヤーは「${input}」と言いました。村長として適切に応答してください。`,
+          },
         ]);
-        
+
         return { narrative: response.text || 'モーガン村長とお話ししました。' };
       } catch (error) {
         return { narrative: 'モーガン村長は会議中で、後で来てほしいと言います。' };
       }
     }
-    
+
     return null; // 特別なコマンドではない
   }
 
@@ -483,21 +504,22 @@ export class DemonLordRPG {
    */
   private applyStateChangesToGameState(gameState: GameState, changes: any): GameState {
     const newState = { ...gameState };
-    
+
     if (changes.stats) {
-      Object.keys(changes.stats).forEach(stat => {
+      Object.keys(changes.stats).forEach((stat) => {
         if (stat in newState.playerStats) {
-          (newState.playerStats as any)[stat] = Math.max(0, 
+          (newState.playerStats as any)[stat] = Math.max(
+            0,
             Math.min(100, (newState.playerStats as any)[stat] + changes.stats[stat])
           );
         }
       });
     }
-    
+
     if (changes.flags) {
       newState.gameFlags = { ...newState.gameFlags, ...changes.flags };
     }
-    
+
     if (changes.location) {
       newState.location = changes.location;
     }
@@ -509,7 +531,7 @@ export class DemonLordRPG {
     if (changes.wealth !== undefined) {
       newState.playerStats.wealth = Math.max(0, changes.wealth);
     }
-    
+
     return newState;
   }
 

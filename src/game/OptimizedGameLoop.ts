@@ -293,9 +293,6 @@ export class OptimizedGameLoop {
   }
 
   /**
-   * ゲーム状態更新（非同期化）
-   */
-  /**
    * AI駆動のゲーム状態更新（Few-shot prompting使用）
    */
   private async updateGameStateAsync(action: string): Promise<void> {

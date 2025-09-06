@@ -15,7 +15,7 @@ const narrator = new AudioNarrator();
 // ゲームコマンドAPI
 app.post('/api/command', async (req, res) => {
   const { command } = req.body;
-  
+
   try {
     const response = await gameLoop.processPlayerActionOptimized(command);
     

@@ -7,20 +7,20 @@ export async function generateSceneImage(prompt: string, day: number): Promise<s
 
   try {
     const requestBody = {
-      model: "grok-2-image-1212",
+      model: 'grok-2-image-1212',
       prompt: `fantasy RPG scene: ${prompt}`,
-      n: 1
+      n: 1,
     };
 
     console.log(`🎨 画像生成リクエスト (Day ${day}):`, requestBody);
 
-    const response = await fetch("https://api.x.ai/v1/images/generations", {
-      method: "POST",
+    const response = await fetch('https://api.x.ai/v1/images/generations', {
+      method: 'POST',
       headers: {
-        "Authorization": `Bearer ${process.env.XAI_API_KEY}`,
-        "Content-Type": "application/json"
+        Authorization: `Bearer ${process.env.XAI_API_KEY}`,
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -33,9 +33,8 @@ export async function generateSceneImage(prompt: string, day: number): Promise<s
     const result = await response.json();
     console.log(`✨ 画像生成成功 (Day ${day}): ${result.data[0].url}`);
     return result.data[0].url;
-
   } catch (error) {
-    console.error("画像生成エラー:", error);
+    console.error('画像生成エラー:', error);
     return null;
   }
 }

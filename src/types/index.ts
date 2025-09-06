@@ -1,12 +1,12 @@
 // ゲームの基本型定義
-export type PlayerRole = 
-  | "hero" 
-  | "merchant" 
-  | "coward" 
-  | "traitor" 
-  | "villager" 
-  | "sage" 
-  | "mercenary";
+export type PlayerRole =
+  | 'hero'
+  | 'merchant'
+  | 'coward'
+  | 'traitor'
+  | 'villager'
+  | 'sage'
+  | 'mercenary';
 
 export interface GameState {
   currentDay: number;
@@ -32,7 +32,7 @@ export interface PlayerStats {
 export interface InventoryItem {
   id: string;
   name: string;
-  type: "weapon" | "item" | "food" | "information";
+  type: 'weapon' | 'item' | 'food' | 'information';
   value: number;
   description?: string;
 }
@@ -40,14 +40,14 @@ export interface InventoryItem {
 export interface NPCRelationship {
   npcName: string;
   affinity: number; // -100 to +100
-  trust: number;    // 0 to 100
+  trust: number; // 0 to 100
   knownInformation: string[];
 }
 
 export interface GameEvent {
   id: string;
   day: number;
-  type: "morning" | "noon" | "evening" | "night";
+  type: 'morning' | 'noon' | 'evening' | 'night';
   title: string;
   description: string;
   choices: Choice[];
@@ -69,7 +69,7 @@ export interface Choice {
 }
 
 export interface ConsequenceEffect {
-  type: "stat" | "item" | "flag" | "relationship" | "location";
+  type: 'stat' | 'item' | 'flag' | 'relationship' | 'location';
   target: string;
   change: number | string | boolean;
 }
@@ -84,12 +84,12 @@ export interface AgentContext {
   conversationHistory: string[];
 }
 
-export type EndingType = 
-  | "PERFECT_VICTORY"
-  | "COSTLY_VICTORY" 
-  | "TACTICAL_RETREAT"
-  | "DEVASTATING_DEFEAT"
-  | "ESCAPE_SUCCESS"
-  | "BETRAYAL_SUCCESS"
-  | "MERCHANT_SUCCESS"
-  | "UNEXPECTED_PEACE";
+export type EndingType =
+  | 'PERFECT_VICTORY'
+  | 'COSTLY_VICTORY'
+  | 'TACTICAL_RETREAT'
+  | 'DEVASTATING_DEFEAT'
+  | 'ESCAPE_SUCCESS'
+  | 'BETRAYAL_SUCCESS'
+  | 'MERCHANT_SUCCESS'
+  | 'UNEXPECTED_PEACE';

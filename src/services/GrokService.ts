@@ -8,11 +8,7 @@ export class GrokService {
   /**
    * プレイヤーのアクションに基づいて動的な物語を生成
    */
-  static async generateNarrative(
-    day: number,
-    action: string,
-    gameState: any
-  ): Promise<string> {
+  static async generateNarrative(day: number, action: string, gameState: any): Promise<string> {
     const prompt = `
 あなたは魔王RPGの物語を紡ぐストーリーテラーです。
 
@@ -46,7 +42,6 @@ export class GrokService {
         model: xai(GAME_CONFIG.MODELS.NARRATIVE),
         prompt,
         temperature: 0.8, // 創造性を高める
-        maxTokens: 200,
       });
 
       if (!text || text.trim().length === 0) {
@@ -64,11 +59,7 @@ export class GrokService {
   /**
    * 状況に応じた動的な選択肢を生成
    */
-  static async generateChoices(
-    day: number,
-    narrative: string,
-    gameState: any
-  ): Promise<string[]> {
+  static async generateChoices(day: number, narrative: string, gameState: any): Promise<string[]> {
     const prompt = `
 【現在の状況】
 Day ${day}/30
@@ -99,7 +90,6 @@ JSONのみを返してください。他のテキストは不要です。
         model: xai(GAME_CONFIG.MODELS.CHOICES),
         prompt,
         temperature: 0.7,
-        maxTokens: 200,
       });
 
       // JSON部分を抽出
@@ -113,24 +103,19 @@ JSONのみを返してください。他のテキストは不要です。
       }
 
       throw new AIError('JSON形式が見つからない');
-
     } catch (error) {
       console.error('選択肢生成エラー:', handleError(error, 'generateChoices'));
       // フォールバック（日数に応じた動的な選択肢）
-      const baseChoices = [
-        "村長と相談する",
-        "武器を探しに行く",
-        "情報を集める",
-      ];
-      
+      const baseChoices = ['村長と相談する', '武器を探しに行く', '情報を集める'];
+
       if (day > 20) {
-        baseChoices.push("魔王軍の偵察", "避難準備を始める");
+        baseChoices.push('魔王軍の偵察', '避難準備を始める');
       } else if (day > 10) {
-        baseChoices.push("訓練を積む", "仲間を探す");
+        baseChoices.push('訓練を積む', '仲間を探す');
       } else {
-        baseChoices.push("村を探索する", "休息を取る");
+        baseChoices.push('村を探索する', '休息を取る');
       }
-      
+
       return baseChoices.slice(0, 4);
     }
   }
@@ -138,28 +123,26 @@ JSONのみを返してください。他のテキストは不要です。
   /**
    * 重要なイベントの判定
    */
-  static async checkForSpecialEvent(
-    day: number,
-    gameState: any
-  ): Promise<string | null> {
+  static async checkForSpecialEvent(day: number, gameState: any): Promise<string | null> {
     // 設定ファイルから特別イベント日を取得
-    if (!GAME_CONFIG.SPECIAL_EVENT_DAYS.includes(day)) {
+    if (!GAME_CONFIG.SPECIAL_EVENT_DAYS.includes(day as any)) {
       return null;
     }
 
-    const specialDays = {
-      5: "商人が村を訪れる",
-      10: "偵察隊が魔王軍の動きを報告", 
-      15: "村に不穏な噂が広がる",
-      20: "魔王軍の先遣隊が目撃される",
-      25: "最後の準備期間",
-      29: "決戦前夜",
-      30: "魔王襲来！"
+    const specialDays: Record<number, string> = {
+      5: '商人が村を訪れる',
+      10: '偵察隊が魔王軍の動きを報告',
+      15: '村に不穏な噂が広がる',
+      20: '魔王軍の先遣隊が目撃される',
+      25: '最後の準備期間',
+      29: '決戦前夜',
+      30: '魔王襲来！',
     };
 
-    if (specialDays[day]) {
+    const eventDescription = specialDays[day];
+    if (eventDescription) {
       const prompt = `
-【特別イベント】${specialDays[day]}
+【特別イベント】${eventDescription}
 【プレイヤー情報】役割: ${gameState.playerRole}, 評判: ${gameState.reputation}
 
 このイベントの詳細な描写を2-3文で生成してください。
@@ -171,12 +154,11 @@ JSONのみを返してください。他のテキストは不要です。
           model: xai(GAME_CONFIG.MODELS.SPECIAL_EVENTS),
           prompt,
           temperature: 0.7,
-          maxTokens: 150,
         });
         return text;
       } catch (error) {
         console.error('イベント生成エラー:', handleError(error, 'checkForSpecialEvent'));
-        return specialDays[day];
+        return eventDescription;
       }
     }
 
