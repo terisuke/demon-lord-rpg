@@ -1,32 +1,68 @@
 {
   "name": "demon-lord-rpg",
   "version": "1.0.0",
-  "description": "## 📖 概要",
-  "main": "index.js",
+  "description": "AI-driven text-based RPG game using Volt Agent framework with multi-agent system",
+  "main": "dist/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
   "directories": {
-    "doc": "docs"
+    "src": "src",
+    "dist": "dist",
+    "docs": "docs"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "dev:debug": "tsx watch --inspect src/index.ts",
+    "build": "npm run clean && npm run typecheck && tsc",
+    "clean": "rimraf dist",
     "start": "node dist/index.js",
+    "start:prod": "NODE_ENV=production node dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint src --ext .ts,.tsx",
+    "test:watch": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint src --ext .ts,.tsx --max-warnings 0",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,md}\"",
+    "prepare": "npm run build",
+    "prepack": "npm run build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "rpg",
+    "ai",
+    "game",
+    "multi-agent",
+    "volt-agent",
+    "xai",
+    "grok",
+    "typescript",
+    "text-based-game"
+  ],
+  "author": "Demon Lord RPG Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/demon-lord-rpg.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/demon-lord-rpg/issues"
+  },
+  "homepage": "https://github.com/your-org/demon-lord-rpg#readme",
   "dependencies": {
     "@ai-sdk/xai": "^2.0.16",
     "@voltagent/core": "^0.1.86",
     "@voltagent/vercel-ai": "^1.0.0",
     "ai": "^5.0.33",
     "dotenv": "^17.2.2",
+    "express": "^4.18.2",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/express": "^4.17.17",
     "@types/node": "^24.3.1",
     "@typescript-eslint/eslint-plugin": "^8.42.0",
     "@typescript-eslint/parser": "^8.42.0",
@@ -34,7 +70,17 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "prettier": "^3.6.2",
+    "rimraf": "^6.0.1",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

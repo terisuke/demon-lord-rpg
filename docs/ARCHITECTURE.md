@@ -84,7 +84,7 @@ interface GameMasterAgent {
 | **L2** | StoryTeller | grok-4 | 物語生成、描写 |
 | **L2** | EventManager | grok-code-fast-1 | ロジック処理、状態管理 |
 | **L3** | NPC_Agents | grok-3-mini | 個別キャラクター |
-| **L3** | ImageGenerator | grok-2-image-1212 | ビジュアル生成 |
+| **L3** | ImageGenerator | grok-2-image-1212 | ビジュアル生成（$0.07/枚） |
 
 ### 2.3 エージェント間通信
 
@@ -96,7 +96,11 @@ interface AgentMessage {
   type: "command" | "query" | "response";
   payload: any;
   context: GameContext;
+  priority?: "high" | "normal" | "low";
 }
+
+// 実装ガイドへのリンク
+// 詳細な実装方法は [IMPLEMENTATION_GUIDE.md](./IMPLEMENTATION_GUIDE.md) を参照
 
 // デリゲーション
 class GameMaster {

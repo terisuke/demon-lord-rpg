@@ -2,13 +2,14 @@ import { Agent } from '@voltagent/core';
 import { VercelAIProvider } from '@voltagent/vercel-ai';
 import { xai } from '@ai-sdk/xai';
 import { z } from 'zod';
-import { GameState, PlayerRole, GameEvent, Choice, AgentContext } from '../types';
-import { GameStateSchema, GameEventSchema } from '../schemas';
+import { GameState, PlayerRole, GameEvent, Choice } from '../types';
 
-export class GameMasterAgent extends Agent {
-  private subAgents: Record<string, Agent> = {};
-  
-  constructor(subAgents?: Record<string, Agent>) {
+/**
+ * GameMaster Supervisor Agent
+ * Volt Agent フレームワークの Supervisor/Sub-agent パターンに準拠
+ */
+export class GameMasterAgent extends Agent<VercelAIProvider> {
+  constructor(subAgents?: Record<string, Agent<VercelAIProvider>>) {
     super({
       name: 'GameMaster',
       instructions: `
@@ -18,7 +19,7 @@ export class GameMasterAgent extends Agent {
 - ゲーム全体の進行管理と意思決定
 - プレイヤーの行動に対する判断と結果の決定
 - 30日間のカウントダウンシステムの管理
-- NPCエージェントへのタスク委譲
+- Sub-agentへの適切な委譲判断
 - ワールドステートの一貫性維持
 
 ## ゲーム設定
@@ -27,73 +28,65 @@ export class GameMasterAgent extends Agent {
 - システム: 1日 = 1ターン（朝・昼・夕・夜）
 - プレイヤー: 7つの役割から選択可能
 
-## 委譲判断基準
-- NPC固有の知識や性格に関わることはNPCエージェントに委譲
-- 村の政治的決定はElder Morganに委譲
-- 商取引や経済活動はMerchant Gromに委譲
-- 一般的な進行管理は自分が処理
+## Sub-agent委譲ルール
+- Elder_Morgan: 村の政治・統治・予言告知
+- Merchant_Grom: 商取引・装備強化・経済活動
+- Elara_Sage: 魔法・予言解釈・古代知識
+- 一般的な進行管理: GameMaster自身が処理
 
-## 応答ルール
-- 常に物語性を重視した魅力的な描写を行う
-- プレイヤーの役割に応じた体験を提供
-- 選択肢は明確で結果が予想できるものを用意
-- 30日のカウントダウンによる緊張感を演出
+## 応答形式
+- 常にJSON形式で構造化されたレスポンス
+- 委譲が必要な場合は "needsDelegation": true
+- 物語性を重視した魅力的な描写
+- プレイヤー役割に応じた体験提供
 
-JSON形式でのレスポンスを心がけ、構造化されたデータを返してください。
+応答例:
+{
+  "needsDelegation": false,
+  "narrative": "ゲーム進行の描写",
+  "stateChanges": { "stats": {}, "flags": {} },
+  "choices": []
+}
       `,
       llm: new VercelAIProvider(),
-      model: xai('grok-4'), // 複雑な推論にはgrok-4を使用
+      model: xai('grok-4'), // Supervisor用の高性能モデル
+      subAgents: subAgents, // Volt Agent フレームワークの sub-agent 管理
       tools: [
         {
-          name: 'delegate_to_npc',
-          description: 'NPCエージェントに特定のタスクを委譲する',
+          name: 'evaluate_player_action',
+          description: 'プレイヤーの行動を評価し、委譲の必要性を判断する',
           parameters: z.object({
-            npcName: z.string().describe('委譲先のNPC名（Elder_Morgan, Merchant_Grom等）'),
-            task: z.string().describe('委譲するタスクの内容'),
-            context: z.object({
+            playerAction: z.string(),
+            gameContext: z.object({
               playerName: z.string(),
               playerRole: z.string(),
               currentDay: z.number(),
-              situation: z.string()
-            }).describe('現在のゲーム状況')
-          }),
-          execute: async (params) => {
-            return await this.delegateToNPC(params.npcName, params.task, params.context);
-          }
-        },
-        {
-          name: 'update_game_state',
-          description: 'ゲーム状態を更新する',
-          parameters: z.object({
-            stateChanges: z.object({
-              stats: z.record(z.number()).optional(),
-              flags: z.record(z.boolean()).optional(),
-              location: z.string().optional(),
-              day: z.number().optional()
+              location: z.string(),
+              gameState: z.any()
             })
           }),
           execute: async (params) => {
-            return this.updateGameState(params.stateChanges);
+            return await this.evaluatePlayerAction(params.playerAction, params.gameContext);
           }
         },
         {
-          name: 'generate_choices',
-          description: '状況に応じた選択肢を生成する',
+          name: 'manage_game_state',
+          description: 'ゲーム状態の更新と管理',
           parameters: z.object({
-            situation: z.string(),
-            playerRole: z.string(),
-            availableActions: z.array(z.string()).optional()
+            stateUpdates: z.object({
+              stats: z.record(z.number()).optional(),
+              flags: z.record(z.boolean()).optional(),
+              location: z.string().optional(),
+              day: z.number().optional(),
+              inventory: z.array(z.any()).optional()
+            })
           }),
           execute: async (params) => {
-            return this.generateChoices(params.situation, params.playerRole, params.availableActions);
+            return await this.manageGameState(params.stateUpdates);
           }
         }
       ]
     });
-    
-    if (subAgents) {
-      this.subAgents = subAgents;
-    }
   }
 
   /**
@@ -275,48 +268,56 @@ JSON形式で回答：
   }
 
   /**
-   * NPCエージェントにタスクを委譲
+   * プレイヤー行動の評価と委譲判断
    */
-  private async delegateToNPC(npcName: string, task: string, context: any): Promise<any> {
-    const npc = this.subAgents[npcName];
-    if (!npc) {
-      console.warn(`NPC ${npcName} が見つかりません。GameMasterが直接処理します。`);
-      return { 
-        narrative: `${npcName}との相互作用: ${task}`,
-        stateChanges: {}
-      };
+  private async evaluatePlayerAction(
+    playerAction: string, 
+    gameContext: {
+      playerName: string;
+      playerRole: string;
+      currentDay: number;
+      location: string;
+      gameState?: Record<string, unknown>;
     }
+  ): Promise<{
+    needsDelegation: boolean;
+    delegationTarget: string | null;
+    narrative: string;
+    stateChanges: Record<string, unknown>;
+    choices: Choice[];
+  }> {
+    // GameMaster による行動の解釈と委譲判断
+    const evaluation = {
+      needsDelegation: false,
+      delegationTarget: null,
+      narrative: '',
+      stateChanges: {},
+      choices: []
+    };
 
-    try {
-      const response = await npc.generateText([
+    // 委譲判断ロジック
+    if (playerAction.includes('村長') || playerAction.includes('予言') || playerAction.includes('布告')) {
+      evaluation.needsDelegation = true;
+      evaluation.delegationTarget = 'Elder_Morgan';
+    } else if (playerAction.includes('商売') || playerAction.includes('武器') || playerAction.includes('装備') || playerAction.includes('買い')) {
+      evaluation.needsDelegation = true;
+      evaluation.delegationTarget = 'Merchant_Grom';
+    } else if (playerAction.includes('魔法') || playerAction.includes('占い') || playerAction.includes('賢者') || playerAction.includes('エララ')) {
+      evaluation.needsDelegation = true;
+      evaluation.delegationTarget = 'Elara_Sage';
+    } else {
+      // GameMaster が直接処理
+      evaluation.narrative = `プレイヤー「${gameContext.playerName}」が「${playerAction}」という行動を取りました。`;
+      evaluation.choices = [
         {
-          role: 'user',
-          content: `
-プレイヤー「${context.playerName}」（役割: ${context.playerRole}）がDay ${context.currentDay}にあなたのところに来ました。
-状況: ${context.situation}
-要求: ${task}
-
-あなたの性格と知識に基づいて応答し、以下のJSON形式で回答してください：
-{
-  "narrative": "NPCの発言・行動の描写（200-300文字）",
-  "stateChanges": {
-    "stats": {},
-    "flags": {},
-    "relationship": {}
-  }
-}
-          `
+          id: 'continue',
+          text: '続ける',
+          consequences: { immediate: [] }
         }
-      ]);
-
-      return this.parseAIResponse(response.text);
-    } catch (error) {
-      console.error(`NPC ${npcName} への委譲中にエラー:`, error);
-      return {
-        narrative: `${npcName}は忙しそうで、後で話そうと言います。`,
-        stateChanges: {}
-      };
+      ];
     }
+
+    return evaluation;
   }
 
   /**
@@ -390,11 +391,18 @@ JSON形式で回答：
   }
 
   /**
-   * ゲーム状態更新ツール実行
+   * ゲーム状態の管理と更新
    */
-  private updateGameState(changes: any): string {
-    // ツールの実行結果を返す
-    return `ゲーム状態を更新しました: ${JSON.stringify(changes)}`;
+  private async manageGameState(stateUpdates: any): Promise<string> {
+    // ゲーム状態の更新ロジック
+    console.log('🎮 GameMaster: ゲーム状態を更新中...', stateUpdates);
+    
+    // 状態の整合性チェック
+    if (stateUpdates.day && stateUpdates.day > 30) {
+      console.warn('⚠️ Day 30を超えています。魔王襲来イベントを発動します。');
+    }
+    
+    return `ゲーム状態を更新しました: ${JSON.stringify(stateUpdates)}`;
   }
 
   /**

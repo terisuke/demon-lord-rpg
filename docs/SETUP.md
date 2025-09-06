@@ -20,9 +20,18 @@
 5. キーに名前を付けて作成（例：`demon-lord-rpg`）
 6. **⚠️ 重要**: 表示されたキーを直ちにコピー（一度しか表示されません）
 
-### 2. AIVIS Cloud API（オプション - 音声機能用）
+### 2. AIVIS Cloud API（音声機能用）
 
-*現在調査中のため、後日追加予定*
+1. [AIVIS Cloud](https://aivis-project.com/)にアクセス
+2. 無料アカウントを作成（現在無料ベータ期間中）
+3. ダッシュボードから「API Keys」セクションへ移動
+4. 「Create New Key」をクリック
+5. 生成されたAPIキーをコピー
+6. `.env`ファイルに追加：
+   ```env
+   AIVIS_API_KEY=your-aivis-api-key-here
+   ```
+7. **注意**: 現在無料ベータ期間中のため、全機能を無料で利用可能
 
 ## 🚀 プロジェクトセットアップ
 
@@ -43,11 +52,13 @@ cd demon-lord-rpg
 
 ```bash
 # Volt Agentプロジェクトを初期化
-npm create voltagent-app@latest .
+npm create voltagent-app@latest demon-lord-rpg
 
 # プロンプトに従って設定
 # ? Project Name: demon-lord-rpg
-# ? AI Provider: Groq (一時的に選択、後でGrokに変更)
+# ? AI Provider: OpenAI (一時的に選択、後でGrokに変更)
+# ? API Key: （スキップ - Enterキー）
+# ? Package Manager: npm
 # ? API Key: スキップ（Enterキー）
 # ? Package Manager: npm
 ```

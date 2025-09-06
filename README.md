@@ -27,6 +27,7 @@
 - Node.js v20以上
 - npm または yarn
 - Grok API キー（[xAI Console](https://console.x.ai)で取得）
+- AIVIS Cloud API キー（[公式サイト](https://aivis-project.com/)で取得、現在無料）
 
 ### インストール
 
@@ -40,7 +41,9 @@ npm install
 
 # 環境変数の設定
 cp .env.example .env
-# .envファイルを編集してXAI_API_KEYを設定
+# .envファイルを編集して以下を設定：
+# - XAI_API_KEY（必須）
+# - AIVIS_API_KEY（音声機能用、オプション）
 ```
 
 ### 開発サーバーの起動
@@ -74,19 +77,33 @@ demon-lord-rpg/
 
 ## 📚 ドキュメント
 
+### 基本ドキュメント
 - [アーキテクチャ設計](./docs/ARCHITECTURE.md)
 - [セットアップガイド](./docs/SETUP.md)
 - [ゲーム設計書](./docs/GAME_DESIGN.md)
-- [API仕様書](./docs/API.md)
 - [開発ガイドライン](./docs/DEVELOPMENT.md)
+
+### 技術ドキュメント
+- [🔧 実装ガイド](./docs/IMPLEMENTATION_GUIDE.md) - 完全な技術実装詳細
+- [⚡ クイックスタート](./docs/QUICK_START.md) - 即座に動作するコード例  
+- [📊 開発記録](./docs/DEVELOPMENT_JOURNEY.md) - **技術記事用**詳細なトライ&エラー
+- [🔍 デバッグガイド](./docs/DEBUG_MONITORING.md) - VoltOps統合監視
+- [🎙️ AIVIS統合](./docs/AIVIS_INTEGRATION.md) - 音声合成詳細
+- [📖 APIリファレンス](./docs/API_REFERENCE.md)
+- [🔧 トラブルシューティング](./docs/TROUBLESHOOTING.md)
 
 ## 🎯 開発ロードマップ
 
-### Phase 1: MVP（現在）
+### Phase 1: MVP（完了 ✅）
 - [x] プロジェクト初期化
-- [ ] 基本的なエージェント実装
-- [ ] 30日カウントシステム
-- [ ] 3つのエンディング実装
+- [x] Volt Agent + Grok API統合  
+- [x] 完全自由度の実装（プレイヤーが何でも入力可能）
+- [x] 動的物語生成（AI駆動）
+- [x] 画像生成機能（Day 1,10,20,30）
+- [x] 30日カウントダウンシステム
+- [x] 5つのエンディング分岐
+- [x] Web UI実装
+- [x] 自由入力 + 動的選択肢システム
 
 ### Phase 2: 拡張機能
 - [ ] 音声合成統合
