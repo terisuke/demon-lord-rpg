@@ -1,0 +1,496 @@
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>30日後の魔王襲来 - AI駆動型RPG</title>
+  <style>
+    body {
+      font-family: 'Hiragino Kaku Gothic Pro', 'メイリオ', sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: white;
+    }
+    
+    #game-container {
+      background: rgba(0, 0, 0, 0.8);
+      border-radius: 15px;
+      padding: 30px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+    
+    h1 {
+      text-align: center;
+      font-size: 2.5em;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+      margin-bottom: 10px;
+    }
+    
+    #day-counter {
+      font-size: 28px;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: linear-gradient(90deg, #ff6b6b, #ffd93d);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    
+    #narrative {
+      min-height: 150px;
+      margin: 20px 0;
+      font-size: 18px;
+      line-height: 1.8;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      border-left: 4px solid #ffd93d;
+      white-space: pre-wrap;
+    }
+    
+    #special-event {
+      background: rgba(255, 107, 107, 0.2);
+      border: 2px solid #ff6b6b;
+      border-radius: 10px;
+      padding: 15px;
+      margin: 15px 0;
+      font-weight: bold;
+      text-align: center;
+      animation: flash 1s infinite;
+    }
+    
+    @keyframes flash {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    
+    #scene-image {
+      width: 100%;
+      max-height: 400px;
+      object-fit: cover;
+      border-radius: 10px;
+      margin: 20px 0;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    }
+    
+    #choices {
+      margin: 20px 0;
+    }
+    
+    .choice-button {
+      display: block;
+      width: 100%;
+      padding: 15px 20px;
+      margin: 10px 0;
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.2));
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.3s;
+      text-align: left;
+    }
+    
+    .choice-button:hover {
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.3));
+      transform: translateX(10px);
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+    }
+    
+    .choice-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    /* 自由入力セクション */
+    #free-input-section {
+      margin: 30px 0;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      border: 2px dashed rgba(255, 255, 255, 0.3);
+    }
+    
+    #free-input-label {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: #ffd93d;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    #free-input {
+      width: calc(100% - 120px);
+      padding: 12px;
+      font-size: 16px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      border-radius: 5px;
+      margin-right: 10px;
+    }
+    
+    #free-input:focus {
+      outline: none;
+      border-color: #ffd93d;
+      box-shadow: 0 0 10px rgba(255, 217, 61, 0.3);
+    }
+    
+    #free-input-submit {
+      padding: 12px 25px;
+      background: linear-gradient(90deg, #ff6b6b, #ffd93d);
+      border: none;
+      color: black;
+      font-weight: bold;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 5px;
+      transition: all 0.3s;
+    }
+    
+    #free-input-submit:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px rgba(255, 217, 61, 0.5);
+    }
+    
+    #free-input-submit:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    /* ローディング表示 */
+    .loading {
+      text-align: center;
+      font-size: 20px;
+      padding: 20px;
+      color: #ffd93d;
+    }
+    
+    .loading::after {
+      content: '...';
+      animation: dots 1.5s infinite;
+    }
+    
+    @keyframes dots {
+      0%, 20% { content: '.'; }
+      40% { content: '..'; }
+      60%, 100% { content: '...'; }
+    }
+    
+    /* ゲーム情報パネル */
+    #game-info {
+      display: flex;
+      justify-content: space-around;
+      margin: 20px 0;
+      padding: 15px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 10px;
+    }
+    
+    .info-item {
+      text-align: center;
+    }
+    
+    .info-label {
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+    }
+    
+    .info-value {
+      font-size: 20px;
+      font-weight: bold;
+      color: #ffd93d;
+    }
+    
+    /* エンディング画面 */
+    #ending-screen {
+      text-align: center;
+      padding: 40px;
+      background: linear-gradient(135deg, rgba(255, 107, 107, 0.3), rgba(255, 217, 61, 0.3));
+      border-radius: 15px;
+      margin: 20px 0;
+    }
+    
+    #ending-title {
+      font-size: 36px;
+      margin-bottom: 20px;
+      text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7);
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <h1>🏰 30日後の魔王襲来 🗡️</h1>
+    
+    <div id="day-counter">Day 1 / 30</div>
+    
+    <div id="game-info">
+      <div class="info-item">
+        <div class="info-label">役割</div>
+        <div class="info-value" id="role-display">英雄</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">評判</div>
+        <div class="info-value" id="reputation-display">0</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">所持金</div>
+        <div class="info-value" id="gold-display">100G</div>
+      </div>
+    </div>
+    
+    <div id="special-event" style="display: none;"></div>
+    
+    <div id="narrative">
+      始まりの村アルファで目覚めたあなた。
+      予言によれば、30日後に魔王が襲来するという。
+      村人たちは不安に包まれている。
+      
+      あなたは何をしますか？
+    </div>
+    
+    <img id="scene-image" style="display: none;" />
+    
+    <div id="choices">
+      <!-- AIが生成した選択肢がここに表示される -->
+    </div>
+    
+    <!-- 自由入力セクション -->
+    <div id="free-input-section">
+      <label id="free-input-label">💭 自由に行動を入力（AIが理解して物語を紡ぎます）</label>
+      <input 
+        type="text" 
+        id="free-input" 
+        placeholder="例: 村の外に偵察に行く / 魔法を学ぶ / 逃げる準備をする"
+        maxlength="100"
+      />
+      <button id="free-input-submit">実行</button>
+    </div>
+    
+    <div id="loading" class="loading" style="display: none;">
+      AIが物語を紡いでいます
+    </div>
+  </div>
+
+  <script>
+    let currentDay = 1;
+    let isProcessing = false;
+    let gameState = {
+      playerRole: 'hero',
+      reputation: 0,
+      gold: 100
+    };
+    
+    // 初回起動時に最初の選択肢を取得
+    window.addEventListener('load', async () => {
+      await getInitialChoices();
+    });
+    
+    // 最初の選択肢を取得
+    async function getInitialChoices() {
+      try {
+        const response = await fetch('/api/status');
+        const data = await response.json();
+        
+        // デフォルトの選択肢を表示
+        const defaultChoices = [
+          "村長と相談する",
+          "武器を探しに行く",
+          "情報を集める",
+          "村を探索する"
+        ];
+        
+        updateChoices(defaultChoices);
+      } catch (error) {
+        console.error('初期化エラー:', error);
+      }
+    }
+    
+    // コマンドを送信
+    async function sendCommand(command) {
+      if (isProcessing) return;
+      
+      console.log('Sending command:', command);
+      isProcessing = true;
+      
+      // UI更新
+      toggleButtonsEnabled(false); // ボタンを無効化
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('choices').style.display = 'none';
+      document.getElementById('free-input-section').style.display = 'none';
+      
+      try {
+        const response = await fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command })
+        });
+        
+        const data = await response.json();
+        updateGame(data);
+        
+      } catch (error) {
+        console.error('Error:', error);
+        alert('エラーが発生しました。もう一度お試しください。');
+      } finally {
+        isProcessing = false;
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('choices').style.display = 'block';
+        document.getElementById('free-input-section').style.display = 'block';
+        toggleButtonsEnabled(true); // ボタンを有効化
+      }
+    }
+    
+    // ゲーム画面を更新
+    function updateGame(data) {
+      // 日付更新
+      currentDay = data.day;
+      document.getElementById('day-counter').textContent = `Day ${currentDay} / 30`;
+      
+      // 特別イベント表示
+      if (data.specialEvent) {
+        const eventEl = document.getElementById('special-event');
+        eventEl.textContent = `⚠️ ${data.specialEvent}`;
+        eventEl.style.display = 'block';
+      } else {
+        document.getElementById('special-event').style.display = 'none';
+      }
+      
+      // ナレーション更新（タイプライター効果）
+      const narrativeEl = document.getElementById('narrative');
+      narrativeEl.textContent = '';
+      typeWriter(data.narrative, narrativeEl);
+      
+      // 画像更新
+      if (data.imageUrl) {
+        const img = document.getElementById('scene-image');
+        img.src = data.imageUrl;
+        img.style.display = 'block';
+        img.alt = `Day ${currentDay}の場面`;
+      }
+      
+      // 選択肢更新
+      if (!data.gameOver) {
+        updateChoices(data.choices || []);
+      }
+      
+      // ゲーム終了チェック
+      if (data.gameOver) {
+        showEnding(data.narrative);
+      }
+      
+      // Day別の背景色変更（緊張感演出）
+      updateAtmosphere(currentDay);
+    }
+    
+    // タイプライター効果
+    function typeWriter(text, element, index = 0) {
+      if (index < text.length) {
+        element.textContent += text.charAt(index);
+        setTimeout(() => typeWriter(text, element, index + 1), 15);
+      }
+    }
+    
+    // 選択肢を更新
+    function updateChoices(choices) {
+      const choicesEl = document.getElementById('choices');
+      choicesEl.innerHTML = '';
+      
+      choices.forEach((choice, index) => {
+        const button = document.createElement('button');
+        button.className = 'choice-button';
+        button.textContent = `${index + 1}. ${choice}`;
+        button.onclick = () => sendCommand(choice);
+        // ボタンは常に有効で作成し、状態制御は別で行う
+        choicesEl.appendChild(button);
+      });
+    }
+    
+    // ボタンの有効/無効を制御
+    function toggleButtonsEnabled(enabled) {
+      document.querySelectorAll('.choice-button').forEach(btn => {
+        btn.disabled = !enabled;
+      });
+      document.getElementById('free-input-submit').disabled = !enabled;
+    }
+    
+    // 雰囲気を更新（日数に応じて）
+    function updateAtmosphere(day) {
+      const body = document.body;
+      
+      if (day >= 25) {
+        // 最終段階：赤い背景
+        body.style.background = 'linear-gradient(135deg, #8B0000 0%, #DC143C 100%)';
+      } else if (day >= 20) {
+        // 緊迫期：暗い紫
+        body.style.background = 'linear-gradient(135deg, #2e1a47 0%, #563d7c 100%)';
+      } else if (day >= 10) {
+        // 中盤：深い青
+        body.style.background = 'linear-gradient(135deg, #1a2a5e 0%, #2a5298 100%)';
+      } else {
+        // 序盤：通常の青
+        body.style.background = 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)';
+      }
+    }
+    
+    // エンディング表示
+    function showEnding(narrative) {
+      document.getElementById('choices').innerHTML = `
+        <div id="ending-screen">
+          <div id="ending-title">🎮 物語の終幕 🎮</div>
+          <div style="font-size: 18px; margin: 20px 0;">
+            ${narrative}
+          </div>
+          <button class="choice-button" onclick="location.reload()" style="width: auto; margin: 20px auto;">
+            もう一度プレイ
+          </button>
+        </div>
+      `;
+      document.getElementById('free-input-section').style.display = 'none';
+    }
+    
+    // 自由入力の処理
+    document.getElementById('free-input-submit').addEventListener('click', () => {
+      const input = document.getElementById('free-input');
+      const command = input.value.trim();
+      
+      if (command && !isProcessing) {
+        sendCommand(command);
+        input.value = '';
+      }
+    });
+    
+    // Enterキーでも送信
+    document.getElementById('free-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('free-input-submit').click();
+      }
+    });
+    
+    // キーボードショートカット（数字キーで選択肢を選択）
+    document.addEventListener('keypress', (e) => {
+      if (isProcessing) return;
+      
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= 9) {
+        const buttons = document.querySelectorAll('.choice-button');
+        if (buttons[num - 1] && !buttons[num - 1].disabled) {
+          buttons[num - 1].click();
+        }
+      }
+    });
+  </script>
+</body>
+</html>

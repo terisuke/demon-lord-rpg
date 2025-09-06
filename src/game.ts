@@ -10,8 +10,13 @@ dotenv.config();
 
 export class DemonLordRPG {
   private gameMaster: GameMasterAgent;
-  private npcAgents: Record<string, any>;
-  private workflowManager: typeof GameWorkflowManager;
+  private npcAgents: {
+    gameMaster: GameMasterAgent;
+    elderMorgan: any;
+    merchantGrom: any;
+    elaraSage: any;
+  };
+  private workflowManager: GameWorkflowManager;
   private currentGameState: GameState | null = null;
   private rl: readline.Interface;
 
@@ -22,17 +27,27 @@ export class DemonLordRPG {
     }
 
     // NPCエージェントを初期化
-    this.npcAgents = {
-      'Elder_Morgan': new ElderMorganAgent(),
-      'Merchant_Grom': new MerchantGromAgent(),
-      'Elara_Sage': new ElaraSageAgent()
-    };
+    const elderMorgan = new ElderMorganAgent();
+    const merchantGrom = new MerchantGromAgent();
+    const elaraSage = new ElaraSageAgent();
 
-    // GameMasterエージェントを初期化（NPCエージェントを渡す）
-    this.gameMaster = new GameMasterAgent(this.npcAgents);
+    // GameMasterエージェントを初期化（Supervisor/Sub-agentパターン）
+    this.gameMaster = new GameMasterAgent({
+      Elder_Morgan: elderMorgan,
+      Merchant_Grom: merchantGrom,
+      Elara_Sage: elaraSage
+    });
     
-    // ワークフローマネージャー
-    this.workflowManager = GameWorkflowManager;
+    // npcAgentsオブジェクトを設定
+    this.npcAgents = {
+      gameMaster: this.gameMaster,
+      elderMorgan,
+      merchantGrom,
+      elaraSage
+    };
+    
+    // ワークフローマネージャー（インスタンス化）
+    this.workflowManager = new GameWorkflowManager(this.npcAgents);
     
     // コンソール入力用のインターフェース
     this.rl = readline.createInterface({
@@ -40,8 +55,8 @@ export class DemonLordRPG {
       output: process.stdout
     });
 
-    console.log('🏰 マルチエージェントシステムが初期化されました');
-    console.log(`📋 登録NPCs: ${Object.keys(this.npcAgents).join(', ')}`);
+    console.log('🏰 Volt Agent Supervisor/Sub-agentシステムが初期化されました');
+    console.log(`📋 登録Agents: GameMaster(Supervisor) + ${Object.keys(this.npcAgents).filter(k => k !== 'gameMaster').join(', ')}`);
   }
 
   /**

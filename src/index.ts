@@ -1,85 +1,51 @@
-import { generateText } from 'ai';
-import { xai } from '@ai-sdk/xai';
-import dotenv from 'dotenv';
+// src/index.ts - PdMのQUICK_START.md MVP版
+import { VoltAgent, Agent } from "@voltagent/core";
+import { VercelAIProvider } from "@voltagent/vercel-ai";
+import { xai } from "@ai-sdk/xai";
+import * as dotenv from 'dotenv';
 
-// 環境変数の読み込み
 dotenv.config();
 
-// Grok API接続テスト
-async function testGrokConnection() {
-  console.log('🧪 Grok API接続テストを開始します...');
-  
-  try {
-    // APIキーの確認
-    const apiKey = process.env.XAI_API_KEY;
-    if (!apiKey) {
-      throw new Error('XAI_API_KEY が設定されていません');
-    }
-    
-    console.log('✅ APIキーが設定されています');
-    
-    console.log('✅ テストモデルを準備しました');
-    
-    // API呼び出しテスト
-    const response = await generateText({
-      model: xai('grok-2-latest'),
-      messages: [
-        {
-          role: 'user',
-          content: 'こんにちは！魔王RPGのテストです。簡潔に挨拶してください。'
-        }
-      ]
-    });
-    
-    console.log('✅ Grok APIからのレスポンス:');
-    console.log('📝', response.text);
-    
-    return true;
-  } catch (error) {
-    console.error('❌ Grok API接続テストに失敗しました:', error);
-    return false;
-  }
-}
-
-// メイン関数
 async function main() {
   const args = process.argv.slice(2);
-  const mode = args[0] || 'test';
+  const mode = args[0] || 'volt';
 
-  if (mode === 'play' || mode === 'game') {
-    // ゲーム実行モード
-    const { startDemonLordRPG } = await import('./game');
-    await startDemonLordRPG();
+  if (mode === 'server' || mode === 'web') {
+    // HTTPサーバーモード（フロントエンド付き）
+    console.log("🌐 HTTPサーバーモードを起動します...");
+    const { default: startServer } = await import('./server');
     return;
   }
 
-  // テストモード（デフォルト）
-  console.log('🏰 30日後の魔王襲来 - 開発環境テスト');
-  console.log('=====================================');
-  
-  // 環境確認
-  console.log('📋 環境情報:');
-  console.log(`   Node.js: ${process.version}`);
-  console.log(`   環境: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`   ポート: ${process.env.PORT || 3141}`);
-  console.log('');
-  
-  // Grok API接続テスト
-  const connectionTest = await testGrokConnection();
-  
-  if (connectionTest) {
-    console.log('');
-    console.log('🎉 すべてのテストが成功しました！');
-    console.log('');
-    console.log('🎮 ゲームを開始するには:');
-    console.log('   npm run dev play');
-    console.log('   または');
-    console.log('   npx tsx src/index.ts play');
-  } else {
-    console.log('');
-    console.log('❌ テストに失敗しました。環境設定を確認してください。');
-    process.exit(1);
-  }
+  // VoltAgentコンソールモード（デフォルト）
+  console.log("🤖 VoltAgentコンソールモードを起動します...");
+
+  // シンプルなゲームマスターエージェント
+  const gameMasterAgent = new Agent({
+    name: "GameMaster",
+    instructions: `
+      あなたは30日後に魔王が襲来するRPGのゲームマスターです。
+      プレイヤーの行動に応じて物語を進めてください。
+      現在はDay 1から始まります。
+    `,
+    llm: new VercelAIProvider(),
+    model: xai("grok-3-mini"), // まずは安価なモデルでテスト
+  });
+
+  // Volt Agentサーバー起動
+  const voltAgent = new VoltAgent({
+    agents: {
+      gameMaster: gameMasterAgent,
+    },
+  });
+
+  console.log("🎮 ゲームサーバー起動完了");
+  console.log("VoltOpsコンソールでgameMasterエージェントと対話してください");
+  console.log("");
+  console.log("🌐 Web版を起動するには:");
+  console.log("   npm run dev server");
+  console.log("   または");
+  console.log("   npx tsx src/index.ts server");
 }
 
 // エラーハンドリング
@@ -93,12 +59,10 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-// メイン関数の実行
-if (require.main === module) {
+// メイン関数の実行 - ESモジュール対応
+if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => {
     console.error('❌ メイン関数でエラーが発生しました:', error);
     process.exit(1);
   });
 }
-
-export { main };

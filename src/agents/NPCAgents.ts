@@ -7,7 +7,7 @@ import { z } from 'zod';
  * Elder Morgan - 村長
  * 威厳のある村の長老。政治的決定と村の運営を担当
  */
-export class ElderMorganAgent extends Agent {
+export class ElderMorganAgent extends Agent<VercelAIProvider> {
   constructor() {
     super({
       name: 'Elder_Morgan',
@@ -62,7 +62,7 @@ export class ElderMorganAgent extends Agent {
             decree: z.string().describe('布告の内容'),
             urgency: z.enum(['low', 'medium', 'high']).describe('緊急度')
           }),
-          execute: async (params) => {
+          execute: async (params: { decree: string; urgency: 'low' | 'medium' | 'high' }) => {
             return `村長令を発布しました: ${params.decree} (緊急度: ${params.urgency})`;
           }
         },
@@ -72,13 +72,13 @@ export class ElderMorganAgent extends Agent {
           parameters: z.object({
             topic: z.string().describe('調査するトピック')
           }),
-          execute: async (params) => {
-            const records = {
+          execute: async (params: { topic: string }) => {
+            const records: Record<string, string> = {
               'demon_lord': '50年前の魔王襲来では村の半数が犠牲になった。勇者カレンが魔王を封印した。',
               'defense': '村には古い見張り塔と地下避難所がある。武器は限られている。',
               'prophecy': '賢者エララの予言書に「黒き翼が再び舞う時、選ばれし者が道を決める」とある。'
             };
-            return records[params.topic as keyof typeof records] || '該当する記録は見つかりませんでした。';
+            return records[params.topic] || '該当する記録は見つかりませんでした。';
           }
         }
       ]
@@ -90,7 +90,7 @@ export class ElderMorganAgent extends Agent {
  * Merchant Grom - 商人兼鍛冶屋
  * 実直な性格で商売と武器製作を担当
  */
-export class MerchantGromAgent extends Agent {
+export class MerchantGromAgent extends Agent<VercelAIProvider> {
   constructor() {
     super({
       name: 'Merchant_Grom',
@@ -152,8 +152,8 @@ export class MerchantGromAgent extends Agent {
           parameters: z.object({
             item: z.string().describe('確認したいアイテム名')
           }),
-          execute: async (params) => {
-            const inventory = {
+          execute: async (params: { item: string }) => {
+            const inventory: Record<string, { stock: number; price: number; quality: string }> = {
               'sword': { stock: 5, price: 100, quality: 'good' },
               'shield': { stock: 3, price: 80, quality: 'excellent' },
               'armor': { stock: 2, price: 200, quality: 'good' },
@@ -161,7 +161,7 @@ export class MerchantGromAgent extends Agent {
               'potion': { stock: 10, price: 25, quality: 'good' }
             };
             
-            const item = inventory[params.item.toLowerCase() as keyof typeof inventory];
+            const item = inventory[params.item.toLowerCase()];
             return item ? 
               `${params.item}: 在庫${item.stock}個、価格${item.price}G、品質${item.quality}` :
               `申し訳ないが、${params.item}は在庫切れやで`;
@@ -193,7 +193,7 @@ export class MerchantGromAgent extends Agent {
  * Elara the Sage - 賢者
  * 魔法と予言に詳しい知識人
  */
-export class ElaraSageAgent extends Agent {
+export class ElaraSageAgent extends Agent<VercelAIProvider> {
   constructor() {
     super({
       name: 'Elara_Sage',
