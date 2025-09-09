@@ -41,10 +41,17 @@ export class AIVISEnhancedService {
       // Day別感情マッピング
       const config = this.getVoiceConfigByDay(day, context);
 
+      // Check if models are available
+      const modelUuid = this.getModelUuid(config.voice);
+      if (!modelUuid) {
+        console.warn('🎵 AIVIS audio disabled: No available models');
+        return null;
+      }
+
       const processedText = this.preprocessText(text);
 
       const requestBody = {
-        model_uuid: this.getModelUuid(config.voice),
+        model_uuid: modelUuid,
         speaker_uuid: this.getSpeakerUuid(config.voice),
         text: processedText,
         style_id: config.styleId,
@@ -191,28 +198,18 @@ export class AIVISEnhancedService {
   /**
    * 音声モデルUUID取得（正確なAIVIS API UUID使用）
    */
-  private getModelUuid(_voice: string): string {
-    // 提供された正確なモデルUUID
-    return 'a59cb814-0083-4369-8542-f51a29e72af7';
+  private getModelUuid(_voice: string): string | null {
+    // No public models available from AIVIS API - return null to disable audio
+    console.warn('🎵 No AIVIS models available - audio will be disabled');
+    return null;
   }
 
   /**
    * 話者UUID取得
    */
-  private getSpeakerUuid(_voice: string): string {
-    // 提供された正確な話者UUID
-    return 'e756b8e4-b606-4e15-99b1-3f9c6a1b2317';
-
-    /* 将来的な話者分岐用
-    const speakerMap = {
-      'female_calm_jp': 'e756b8e4-b606-4e15-99b1-3f9c6a1b2317',
-      'male_dramatic_jp': 'e756b8e4-b606-4e15-99b1-3f9c6a1b2317', 
-      'elder_jp': 'e756b8e4-b606-4e15-99b1-3f9c6a1b2317',
-      'demon_deep_jp': 'e756b8e4-b606-4e15-99b1-3f9c6a1b2317'
-    };
-    
-    return speakerMap[voice] || 'e756b8e4-b606-4e15-99b1-3f9c6a1b2317';
-    */
+  private getSpeakerUuid(_voice: string): string | null {
+    // No public models available from AIVIS API - return null to disable audio
+    return null;
   }
 
   /**
