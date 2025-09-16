@@ -56,6 +56,7 @@ export interface GameEvent {
 export interface Choice {
   id: string;
   text: string;
+  dayChange?: number; // 行動の複雑さに応じた時間経過（0=同じ日、1+=日数進行）
   requirements?: {
     stats?: Partial<PlayerStats>;
     items?: string[];

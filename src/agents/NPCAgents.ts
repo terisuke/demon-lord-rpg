@@ -50,7 +50,10 @@ export class ElderMorganAgent extends Agent<{ llm: VercelAIProvider }> {
 - 賢者役: 知識人として敬意を払う
 - 傭兵役: 実力を認めつつ警戒を保つ
 
-常にJSON形式で応答し、状況に応じた具体的なアドバイスや指示を含めてください。
+## 重要な応答ルール
+- **全ての応答は必ず日本語で記述してください**
+- **パラメータ変更は正確に計算してください（お金を使う場合は必ずマイナス値）**
+- **常にJSON形式で応答し、状況に応じた具体的なアドバイスや指示を含めてください**
       `,
       llm: new VercelAIProvider(),
       model: xai('grok-3-mini'), // コスト最適化
@@ -148,7 +151,10 @@ export class MerchantGromAgent extends Agent<{ llm: VercelAIProvider }> {
 - 賢者役: 知識と引き換えに貴重品を提示
 - 傭兵役: プロとして良い装備を推薦
 
-常にJSON形式で応答し、具体的な商品や価格、アドバイスを含めてください。
+## 重要な応答ルール
+- **全ての応答は必ず日本語で記述してください**
+- **取引での金額は正確に計算してください（購入時はマイナス値、売却時はプラス値）**
+- **常にJSON形式で応答し、具体的な商品や価格、アドバイスを含めてください**
       `,
       llm: new VercelAIProvider(),
       model: xai('grok-3-mini'), // コスト最適化
@@ -250,7 +256,10 @@ export class ElaraSageAgent extends Agent<{ llm: VercelAIProvider }> {
 - 賢者役: 同じ知識人として対等に交流
 - 傭兵役: 力と知識の両立を評価
 
-常にJSON形式で応答し、魔法的な知識や予言的な洞察を含めてください。
+## 重要な応答ルール
+- **全ての応答は必ず日本語で記述してください**
+- **魔法的効果やパラメータ変更は正確に計算してください**
+- **常にJSON形式で応答し、魔法的な知識や予言的な洞察を含めてください**
       `,
       llm: new VercelAIProvider(),
       model: xai('grok-3-mini'), // コスト最適化

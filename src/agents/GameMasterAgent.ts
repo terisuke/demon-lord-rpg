@@ -115,22 +115,40 @@ export class GameMasterAgent extends Agent<{ llm: VercelAIProvider }> {
 - 評判: ${gameState.playerStats.reputation}/100
 - 所持金: ${gameState.playerStats.wealth}G
 
+【重要な指示】
+1. 全ての文章は日本語で記述してください（選択肢、説明、物語すべて）
+2. パラメータ変更は正確に計算してください：
+   ⚠️ 金額の計算例：
+   - 100Gの剣を購入 → wealth: -100 （マイナス値）
+   - 50Gの報酬を得る → wealth: +50 （プラス値）
+   - 体力を失う → health: -10 （マイナス値）
+   - 評判が上がる → reputation: +5 （プラス値）
+3. 行動の複雑さに応じて時間経過を判断してください：
+   - 軽い行動（会話、情報収集、簡単な買い物など）: dayChange: 0（同じ日のまま）
+   - 中程度の行動（訓練、制作、探索など）: dayChange: 1（次の日へ）
+   - 重い行動（長距離移動、大きな戦闘、重要なイベント）: dayChange: 2-4（数日進む）
+
 この行動を解釈し、必要に応じてNPCエージェントに委譲するか、直接処理するかを決めてください。
 結果を以下のJSON形式で返してください：
 
 {
   "needsDelegation": false,
   "delegationTarget": "npc_name or null",
-  "narrative": "行動の結果描写（200-400文字）",
+  "narrative": "行動の結果描写（200-400文字、必ず日本語）",
   "stateChanges": {
-    "stats": {},
+    "stats": {
+      "health": 0,
+      "reputation": 0,
+      "wealth": 0
+    },
     "flags": {},
     "location": null
   },
+  "dayChange": 0,
   "choices": [
     {
       "id": "choice_1",
-      "text": "選択肢の文章",
+      "text": "選択肢の文章（必ず日本語）",
       "consequences": {
         "immediate": []
       }
@@ -163,8 +181,12 @@ export class GameMasterAgent extends Agent<{ llm: VercelAIProvider }> {
         }
       }
 
-      // ゲーム状態を更新
-      const updatedGameState = this.applyStateChanges(gameState, aiResponse.stateChanges);
+      // ゲーム状態を更新（dayChangeを含める）
+      const stateChangesWithDay = {
+        ...aiResponse.stateChanges,
+        dayChange: aiResponse.dayChange || 0,
+      };
+      const updatedGameState = this.applyStateChanges(gameState, stateChangesWithDay);
 
       return {
         narrative: aiResponse.narrative,
@@ -199,17 +221,23 @@ Day 1のオープニングイベントを作成してください。
 
 Elder Morganからの予言: "${prophecyResult.narrative || '魔王が30日後に襲来する'}"
 
+【重要な指示】
+1. 全ての文章（タイトル、描写、選択肢）は必ず日本語で記述してください
+2. パラメータ変更は正確に計算してください（お金を使う場合は必ずマイナス値）
+3. 各選択肢には行動の複雑さに応じた時間経過を設定してください
+
 この予言を受けたプレイヤーの最初の選択肢を作成してください。
 役割「${gameState.playerRole}」に応じた特別な選択肢も含めてください。
 
 JSON形式で回答：
 {
-  "title": "イベントタイトル",
-  "description": "状況描写（300-500文字）",
+  "title": "イベントタイトル（必ず日本語）",
+  "description": "状況描写（300-500文字、必ず日本語）",
   "choices": [
     {
       "id": "choice_1",
-      "text": "選択肢の文章",
+      "text": "選択肢の文章（必ず日本語）",
+      "dayChange": 0,
       "consequences": {
         "immediate": [
           {
@@ -269,11 +297,25 @@ JSON形式で回答：
 
 状況: ${context.situation}
 
+【重要な指示】
+1. 全ての応答は必ず日本語で記述してください
+2. パラメータ変更は正確に計算してください：
+   ⚠️ 金額の計算例：
+   - 100Gの剣を購入 → wealth: -100 （マイナス値）
+   - 50Gの報酬を得る → wealth: +50 （プラス値）
+   - 体力を失う → health: -10 （マイナス値）
+   - 評判が上がる → reputation: +5 （プラス値）
+3. あなたのキャラクター設定に従って一貫した応答をしてください
+
 あなたのキャラクターとして応答し、結果をJSON形式で返してください：
 {
-  "narrative": "応答と行動の描写（150-300文字）",
+  "narrative": "応答と行動の描写（150-300文字、必ず日本語）",
   "stateChanges": {
-    "stats": {},
+    "stats": {
+      "health": 0,
+      "reputation": 0,
+      "wealth": 0
+    },
     "flags": {}
   }
 }`);
@@ -367,25 +409,57 @@ JSON形式で回答：
   private applyStateChanges(gameState: GameState, changes: any): GameState {
     const newState = { ...gameState };
 
+    // ステータス変更の処理（改善版）
     if (changes.stats) {
       Object.keys(changes.stats).forEach((stat) => {
         if (stat in newState.playerStats) {
-          (newState.playerStats as any)[stat] = Math.max(
-            0,
-            (newState.playerStats as any)[stat] + changes.stats[stat]
-          );
+          const currentValue = (newState.playerStats as any)[stat];
+          const changeValue = changes.stats[stat];
+
+          // 正確な加減算を実行
+          let newValue = currentValue + changeValue;
+
+          // 境界値チェック（ステータスごとに適切な範囲を設定）
+          switch (stat) {
+            case 'health':
+              newValue = Math.max(0, Math.min(100, newValue));
+              break;
+            case 'reputation':
+              newValue = Math.max(-100, Math.min(100, newValue));
+              break;
+            case 'wealth':
+              newValue = Math.max(0, newValue); // お金は0以下にならない
+              break;
+            default:
+              newValue = Math.max(0, newValue);
+          }
+
+          (newState.playerStats as any)[stat] = newValue;
+
+          // デバッグログ
+          console.log(`📊 ${stat}: ${currentValue} ${changeValue >= 0 ? '+' : ''}${changeValue} = ${newValue}`);
         }
       });
     }
 
+    // フラグ変更
     if (changes.flags) {
       newState.gameFlags = { ...newState.gameFlags, ...changes.flags };
     }
 
+    // 場所変更
     if (changes.location) {
       newState.location = changes.location;
     }
 
+    // 日数変更（新機能）
+    if (typeof changes.dayChange === 'number' && changes.dayChange > 0) {
+      const newDay = newState.currentDay + changes.dayChange;
+      newState.currentDay = Math.min(30, newDay);
+      console.log(`⏰ 時間経過: Day ${gameState.currentDay} → Day ${newState.currentDay} (+${changes.dayChange}日)`);
+    }
+
+    // 従来のday変更（直接指定）
     if (changes.day) {
       newState.currentDay = Math.min(30, changes.day);
     }
@@ -406,6 +480,14 @@ JSON形式で回答：
 プレイヤー役割: ${playerRole}
 利用可能な行動: ${availableActions?.join(', ') || '自由'}
 
+【重要な指示】
+1. 全ての選択肢は必ず日本語で記述してください
+2. パラメータ変更は正確に計算してください（お金を使う＝マイナス値、得る＝プラス値）
+3. 各選択肢には行動の複雑さに応じた時間経過を設定してください：
+   - 軽い行動: dayChange: 0
+   - 中程度の行動: dayChange: 1
+   - 重い行動: dayChange: 2-4
+
 この状況に適した2-4個の選択肢を生成してください。
 役割に応じた特別な選択肢も含めてください。
 
@@ -414,7 +496,8 @@ JSON形式で回答：
   "choices": [
     {
       "id": "choice_1",
-      "text": "選択肢の説明",
+      "text": "選択肢の説明（必ず日本語）",
+      "dayChange": 0,
       "consequences": {
         "immediate": [
           {
