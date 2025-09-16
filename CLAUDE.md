@@ -127,10 +127,31 @@ demon-lord-rpg/
 - Zod schemas for all data validation
 
 ### Agent Development
-- Extend base Agent class from @voltagent/core
+- **Correct Agent Class Definition**: Use `Agent<{ llm: VercelAIProvider }>` type parameter
+  ```typescript
+  export class GameMasterAgent extends Agent<{ llm: VercelAIProvider }> {
+    constructor() {
+      super({
+        name: 'GameMaster',
+        instructions: '...',
+        llm: new VercelAIProvider(),
+        model: xai('grok-4')
+      });
+    }
+  }
+  ```
+- **generateText Method Usage**: Pass strings directly, not message arrays
+  ```typescript
+  // ✅ Correct
+  const response = await this.generateText(`Your prompt here`);
+
+  // ❌ Incorrect
+  const response = await this.generateText([{role: 'user', content: 'text'}]);
+  ```
 - Use appropriate model for task complexity (cost optimization)
 - Implement proper cleanup to prevent memory leaks
 - Follow supervisor pattern for agent communication
+- Store sub-agents as instance properties for delegation
 
 ### Cost Management
 - Cache frequently used prompts (75% cost reduction)
@@ -153,6 +174,61 @@ Key variables in `.env`:
 - Integration tests: Agent communication and workflows  
 - E2E tests: Complete game scenarios
 - Mock Grok API responses for consistent testing
+
+## Troubleshooting
+
+### Common TypeScript Errors
+
+**Error: `Type 'VercelAIProvider' does not satisfy the constraint`**
+- **Solution**: Use correct generic type parameter `Agent<{ llm: VercelAIProvider }>`
+- **Wrong**: `extends Agent<VercelAIProvider>`
+- **Right**: `extends Agent<{ llm: VercelAIProvider }>`
+
+**Error: `Property 'generateText' does not exist`**
+- **Solution**: Use string parameter instead of message array
+- **Wrong**: `this.generateText([{role: 'user', content: 'text'}])`
+- **Right**: `this.generateText('text')`
+
+### API Connection Issues
+
+**Grok API "Forbidden" Error**
+1. Verify `XAI_API_KEY` format (should start with `xai-`)
+2. Check billing settings at console.x.ai
+3. Ensure API key has model access permissions
+4. Try different models: `grok-3-mini`, `grok-4`
+
+**Test API Connection**:
+```bash
+# Ensure XAI_API_KEY is set in your environment
+echo "Testing with API key: ${XAI_API_KEY:0:8}..." # Shows only first 8 chars
+
+# Run test
+npx tsx -e "
+import { xai } from '@ai-sdk/xai';
+import { generateText } from 'ai';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
+
+if (!process.env.XAI_API_KEY) {
+  console.error('❌ XAI_API_KEY not found. Set it in .env file');
+  process.exit(1);
+}
+
+try {
+  const { text } = await generateText({
+    model: xai('grok-3-mini'),
+    prompt: 'Hello in Japanese',
+    maxTokens: 10
+  });
+  console.log('✅ API connection successful');
+  console.log('Response:', text);
+} catch (error) {
+  console.error('❌ API test failed:', error.message);
+  process.exit(1);
+}
+"
+```
 
 ## Performance Considerations
 

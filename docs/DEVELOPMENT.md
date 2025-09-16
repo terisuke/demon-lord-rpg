@@ -216,6 +216,78 @@ VS Code での推奨設定：
 }
 ```
 
+#### コード品質改善（2024年12月更新）
+
+プロジェクト全体でコード品質の大幅な改善を実施しました：
+
+**1. 型安全性の強化**
+```typescript
+// ❌ 以前: any型の多用
+function processPlayerAction(gameState: any, action: any): any {
+  // ...
+}
+
+// ✅ 改善後: 専用インターフェース
+function processPlayerAction(
+  gameState: GameState,
+  action: string
+): Promise<AIActionResponse> {
+  // ...
+}
+```
+
+**2. 設定管理の中央集権化**
+```typescript
+// ❌ 以前: ハードコーディング
+if (currentDay > 30) { /* ... */ }
+if (health > 100) { /* ... */ }
+
+// ✅ 改善後: 定数管理
+import { GAME_CONSTANTS } from '../config/gameConstants';
+if (currentDay > GAME_CONSTANTS.MAX_DAYS) { /* ... */ }
+if (health > GAME_CONSTANTS.MAX_HEALTH) { /* ... */ }
+```
+
+**3. エラーハンドリングの統一**
+```typescript
+// ❌ 以前: 不統一なエラー処理
+catch (error) {
+  console.error('エラー:', error);
+  throw new Error(`処理に失敗: ${error}`);
+}
+
+// ✅ 改善後: 統一エラーハンドラー
+catch (error) {
+  const errorMessage = handleError(error, 'GameMasterAgent.processPlayerAction');
+  throw new AIError(`❌ プレイヤー行動処理に失敗: ${errorMessage}`, {
+    playerInput,
+    currentDay: gameState.currentDay
+  });
+}
+```
+
+**4. 動的時間進行システム**
+```typescript
+// ❌ 以前: 固定確率
+if (Math.random() > 0.7) {
+  gameState.currentDay++;
+}
+
+// ✅ 改善後: 行動複雑度ベース
+const timeProgression = this.evaluateTimeProgression(playerInput, gameState);
+if (timeProgression.advance) {
+  gameState.currentDay += timeProgression.daysToAdd;
+  console.log(`⏰ ${timeProgression.reason}`);
+}
+```
+
+**品質チェック手順**:
+1. `npm run lint` - ESLintチェック
+2. `npm run typecheck` - TypeScript型チェック
+3. `npm run build` - ビルド確認
+4. 未使用importの確認
+5. ハードコーディングされた値の定数化
+
 ## 3. エージェント開発ガイド
 
 ### 3.1 新規エージェントの作成手順

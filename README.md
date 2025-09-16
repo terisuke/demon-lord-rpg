@@ -140,8 +140,9 @@ demon-lord-rpg/
 
 ## 📞 お問い合わせ
 
-- Issue: [GitHub Issues](https://github.com/[username]/demon-lord-rpg/issues)
-- Email: [連絡先メール]
+- **GitHub Issues**: [GitHub Issues](https://github.com/terisuke/demon-lord-rpg/issues)
+- **公式メール**: company@cor-jp.com
+- **技術サポート**: GitHub Issuesをご利用ください
 
 ---
 

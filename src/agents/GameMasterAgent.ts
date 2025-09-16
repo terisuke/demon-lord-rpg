@@ -2,14 +2,27 @@ import { Agent } from '@voltagent/core';
 import { VercelAIProvider } from '@voltagent/vercel-ai';
 import { xai } from '@ai-sdk/xai';
 import { z } from 'zod';
-import { GameState, PlayerRole, GameEvent, Choice } from '../types';
+import {
+  GameState,
+  PlayerRole,
+  GameEvent,
+  Choice,
+  AIActionResponse,
+  StateChanges,
+  NPCDelegationResponse,
+  EventData,
+  ChoiceGenerationResponse
+} from '../types';
+import { AIError, handleError } from '../utils/errorHandler';
 
 /**
  * GameMaster Supervisor Agent
  * Volt Agent フレームワークの Supervisor/Sub-agent パターンに準拠
  */
-export class GameMasterAgent extends Agent<VercelAIProvider> {
-  constructor(subAgents?: Record<string, Agent<VercelAIProvider>>) {
+export class GameMasterAgent extends Agent<{ llm: VercelAIProvider }> {
+  private subAgents: Record<string, Agent<{ llm: VercelAIProvider }>>;
+
+  constructor(subAgents?: Record<string, Agent<{ llm: VercelAIProvider }>>) {
     super({
       name: 'GameMaster',
       instructions: `
@@ -50,45 +63,10 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
       `,
       llm: new VercelAIProvider(),
       model: xai('grok-4'), // Supervisor用の高性能モデル
-      subAgents: subAgents, // Volt Agent フレームワークの sub-agent 管理
-      tools: [
-        {
-          id: 'evaluate_player_action',
-          name: 'evaluate_player_action',
-          description: 'プレイヤーの行動を評価し、委託の必要性を判断する',
-          parameters: z.object({
-            playerAction: z.string(),
-            gameContext: z.object({
-              playerName: z.string(),
-              playerRole: z.string(),
-              currentDay: z.number(),
-              location: z.string(),
-              gameState: z.any(),
-            }),
-          }),
-          execute: async (params) => {
-            return await this.evaluatePlayerAction(params.playerAction, params.gameContext);
-          },
-        },
-        {
-          id: 'manage_game_state',
-          name: 'manage_game_state',
-          description: 'ゲーム状態の更新と管理',
-          parameters: z.object({
-            stateUpdates: z.object({
-              stats: z.record(z.number()).optional(),
-              flags: z.record(z.boolean()).optional(),
-              location: z.string().optional(),
-              day: z.number().optional(),
-              inventory: z.array(z.any()).optional(),
-            }),
-          }),
-          execute: async (params) => {
-            return await this.manageGameState(params.stateUpdates);
-          },
-        },
-      ],
     });
+
+    // Store sub-agents as instance property for delegation
+    this.subAgents = subAgents || {};
   }
 
   /**
@@ -120,12 +98,7 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
     };
 
     // GameMasterとしてゲーム開始を宣言
-    await this.generateText([
-      {
-        role: 'user',
-        content: `新しいゲーム「30日後の魔王襲来」を開始します。プレイヤー「${playerName}」（役割：${playerRole}）の冒険が始まります。`,
-      },
-    ]);
+    await this.generateText(`新しいゲーム「30日後の魔王襲来」を開始します。プレイヤー「${playerName}」（役割：${playerRole}）の冒険が始まります。`);
 
     return initialGameState;
   }
@@ -143,10 +116,7 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
   }> {
     try {
       // GameMasterとしてプレイヤーの行動を解釈
-      const response = await this.generateText([
-        {
-          role: 'user',
-          content: `
+      const response = await this.generateText(`
 プレイヤー「${gameState.playerName}」（役割: ${gameState.playerRole}）がDay ${gameState.currentDay}で以下の行動を取りました：
 "${playerInput}"
 
@@ -156,33 +126,48 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
 - 評判: ${gameState.playerStats.reputation}/100
 - 所持金: ${gameState.playerStats.wealth}G
 
+【重要な指示】
+1. 全ての文章は日本語で記述してください（選択肢、説明、物語すべて）
+2. パラメータ変更は正確に計算してください：
+   ⚠️ 金額の計算例：
+   - 100Gの剣を購入 → wealth: -100 （マイナス値）
+   - 50Gの報酬を得る → wealth: +50 （プラス値）
+   - 体力を失う → health: -10 （マイナス値）
+   - 評判が上がる → reputation: +5 （プラス値）
+3. 行動の複雑さに応じて時間経過を判断してください：
+   - 軽い行動（会話、情報収集、簡単な買い物など）: dayChange: 0（同じ日のまま）
+   - 中程度の行動（訓練、制作、探索など）: dayChange: 1（次の日へ）
+   - 重い行動（長距離移動、大きな戦闘、重要なイベント）: dayChange: 2-4（数日進む）
+
 この行動を解釈し、必要に応じてNPCエージェントに委譲するか、直接処理するかを決めてください。
 結果を以下のJSON形式で返してください：
 
 {
   "needsDelegation": false,
   "delegationTarget": "npc_name or null",
-  "narrative": "行動の結果描写（200-400文字）",
+  "narrative": "行動の結果描写（200-400文字、必ず日本語）",
   "stateChanges": {
-    "stats": {},
+    "stats": {
+      "health": 0,
+      "reputation": 0,
+      "wealth": 0
+    },
     "flags": {},
     "location": null
   },
+  "dayChange": 0,
   "choices": [
     {
-      "id": "choice_1", 
-      "text": "選択肢の文章",
+      "id": "choice_1",
+      "text": "選択肢の文章（必ず日本語）",
       "consequences": {
         "immediate": []
       }
     }
   ]
-}
-          `,
-        },
-      ]);
+}`);
 
-      const aiResponse = this.parseAIResponse(response.text);
+      const aiResponse = this.parseAIResponse<AIActionResponse>(response.text);
 
       // NPCへの委譲が必要な場合
       if (aiResponse.needsDelegation && aiResponse.delegationTarget) {
@@ -207,8 +192,12 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
         }
       }
 
-      // ゲーム状態を更新
-      const updatedGameState = this.applyStateChanges(gameState, aiResponse.stateChanges);
+      // ゲーム状態を更新（dayChangeを含める）
+      const stateChangesWithDay = {
+        ...aiResponse.stateChanges,
+        dayChange: aiResponse.dayChange || 0,
+      };
+      const updatedGameState = this.applyStateChanges(gameState, stateChangesWithDay);
 
       return {
         narrative: aiResponse.narrative,
@@ -216,8 +205,15 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
         choices: aiResponse.choices || [],
       };
     } catch (error) {
-      console.error('プレイヤー行動処理中にエラーが発生:', error);
-      throw new Error(`行動処理に失敗しました: ${error}`);
+      const errorMessage = handleError(error, 'GameMasterAgent.processPlayerAction');
+      throw new AIError(
+        `❌ プレイヤー行動処理に失敗しました: ${errorMessage}`,
+        {
+          playerInput,
+          currentDay: gameState.currentDay,
+          playerRole: gameState.playerRole
+        }
+      );
     }
   }
 
@@ -237,43 +233,43 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
       }
     );
 
-    const response = await this.generateText([
-      {
-        role: 'user',
-        content: `
+    const response = await this.generateText(`
 Day 1のオープニングイベントを作成してください。
 プレイヤー「${gameState.playerName}」（役割: ${gameState.playerRole}）
 
 Elder Morganからの予言: "${prophecyResult.narrative || '魔王が30日後に襲来する'}"
+
+【重要な指示】
+1. 全ての文章（タイトル、描写、選択肢）は必ず日本語で記述してください
+2. パラメータ変更は正確に計算してください（お金を使う場合は必ずマイナス値）
+3. 各選択肢には行動の複雑さに応じた時間経過を設定してください
 
 この予言を受けたプレイヤーの最初の選択肢を作成してください。
 役割「${gameState.playerRole}」に応じた特別な選択肢も含めてください。
 
 JSON形式で回答：
 {
-  "title": "イベントタイトル",
-  "description": "状況描写（300-500文字）",
+  "title": "イベントタイトル（必ず日本語）",
+  "description": "状況描写（300-500文字、必ず日本語）",
   "choices": [
     {
       "id": "choice_1",
-      "text": "選択肢の文章",
+      "text": "選択肢の文章（必ず日本語）",
+      "dayChange": 0,
       "consequences": {
         "immediate": [
           {
             "type": "stat",
-            "target": "reputation", 
+            "target": "reputation",
             "change": 10
           }
         ]
       }
     }
   ]
-}
-        `,
-      },
-    ]);
+}`);
 
-    const eventData = this.parseAIResponse(response.text);
+    const eventData = this.parseAIResponse<EventData>(response.text);
 
     return {
       id: 'day_1_opening',
@@ -303,7 +299,7 @@ JSON形式で回答：
   }> {
     try {
       // サブエージェントが利用可能かチェック
-      const subAgent = (this.subAgents as any)?.[npcName];
+      const subAgent = this.subAgents[npcName];
       if (!subAgent) {
         console.warn(`NPC ${npcName} not found, using GameMaster fallback`);
         return {
@@ -313,28 +309,36 @@ JSON形式で回答：
       }
 
       // サブエージェントに委譲
-      const response = await subAgent.generateText([
-        {
-          role: 'user',
-          content: `
+      const response = await subAgent.generateText(`
 プレイヤー「${context.playerName}」（役割: ${context.playerRole}）がDay ${context.currentDay}に以下のタスクを要求しました：
 "${task}"
 
 状況: ${context.situation}
 
+【重要な指示】
+1. 全ての応答は必ず日本語で記述してください
+2. パラメータ変更は正確に計算してください：
+   ⚠️ 金額の計算例：
+   - 100Gの剣を購入 → wealth: -100 （マイナス値）
+   - 50Gの報酬を得る → wealth: +50 （プラス値）
+   - 体力を失う → health: -10 （マイナス値）
+   - 評判が上がる → reputation: +5 （プラス値）
+3. あなたのキャラクター設定に従って一貫した応答をしてください
+
 あなたのキャラクターとして応答し、結果をJSON形式で返してください：
 {
-  "narrative": "応答と行動の描写（150-300文字）",
+  "narrative": "応答と行動の描写（150-300文字、必ず日本語）",
   "stateChanges": {
-    "stats": {},
+    "stats": {
+      "health": 0,
+      "reputation": 0,
+      "wealth": 0
+    },
     "flags": {}
   }
-}
-          `,
-        },
-      ]);
+}`);
 
-      return this.parseAIResponse(response.text);
+      return this.parseAIResponse<NPCDelegationResponse>(response.text);
     } catch (error) {
       console.error(`NPC委譲エラー (${npcName}):`, error);
       return {
@@ -356,15 +360,9 @@ JSON形式で回答：
       location: string;
       gameState?: Record<string, unknown>;
     }
-  ): Promise<{
-    needsDelegation: boolean;
-    delegationTarget: string | null;
-    narrative: string;
-    stateChanges: Record<string, unknown>;
-    choices: Choice[];
-  }> {
+  ): Promise<AIActionResponse> {
     // GameMaster による行動の解釈と委譲判断
-    const evaluation = {
+    const evaluation: AIActionResponse = {
       needsDelegation: false,
       delegationTarget: null,
       narrative: '',
@@ -414,28 +412,60 @@ JSON形式で回答：
   /**
    * ゲーム状態の変更を適用
    */
-  private applyStateChanges(gameState: GameState, changes: any): GameState {
+  private applyStateChanges(gameState: GameState, changes: StateChanges): GameState {
     const newState = { ...gameState };
 
+    // ステータス変更の処理（改善版）
     if (changes.stats) {
       Object.keys(changes.stats).forEach((stat) => {
         if (stat in newState.playerStats) {
-          (newState.playerStats as any)[stat] = Math.max(
-            0,
-            (newState.playerStats as any)[stat] + changes.stats[stat]
-          );
+          const currentValue = (newState.playerStats as any)[stat];
+          const changeValue = changes.stats[stat];
+
+          // 正確な加減算を実行
+          let newValue = currentValue + changeValue;
+
+          // 境界値チェック（ステータスごとに適切な範囲を設定）
+          switch (stat) {
+            case 'health':
+              newValue = Math.max(0, Math.min(100, newValue));
+              break;
+            case 'reputation':
+              newValue = Math.max(-100, Math.min(100, newValue));
+              break;
+            case 'wealth':
+              newValue = Math.max(0, newValue); // お金は0以下にならない
+              break;
+            default:
+              newValue = Math.max(0, newValue);
+          }
+
+          (newState.playerStats as any)[stat] = newValue;
+
+          // デバッグログ
+          console.log(`📊 ${stat}: ${currentValue} ${changeValue >= 0 ? '+' : ''}${changeValue} = ${newValue}`);
         }
       });
     }
 
+    // フラグ変更
     if (changes.flags) {
       newState.gameFlags = { ...newState.gameFlags, ...changes.flags };
     }
 
+    // 場所変更
     if (changes.location) {
       newState.location = changes.location;
     }
 
+    // 日数変更（新機能）
+    if (typeof changes.dayChange === 'number' && changes.dayChange > 0) {
+      const newDay = newState.currentDay + changes.dayChange;
+      newState.currentDay = Math.min(30, newDay);
+      console.log(`⏰ 時間経過: Day ${gameState.currentDay} → Day ${newState.currentDay} (+${changes.dayChange}日)`);
+    }
+
+    // 従来のday変更（直接指定）
     if (changes.day) {
       newState.currentDay = Math.min(30, changes.day);
     }
@@ -451,13 +481,18 @@ JSON形式で回答：
     playerRole: string,
     availableActions?: string[]
   ): Promise<Choice[]> {
-    const response = await this.generateText([
-      {
-        role: 'user',
-        content: `
+    const response = await this.generateText(`
 状況: ${situation}
 プレイヤー役割: ${playerRole}
 利用可能な行動: ${availableActions?.join(', ') || '自由'}
+
+【重要な指示】
+1. 全ての選択肢は必ず日本語で記述してください
+2. パラメータ変更は正確に計算してください（お金を使う＝マイナス値、得る＝プラス値）
+3. 各選択肢には行動の複雑さに応じた時間経過を設定してください：
+   - 軽い行動: dayChange: 0
+   - 中程度の行動: dayChange: 1
+   - 重い行動: dayChange: 2-4
 
 この状況に適した2-4個の選択肢を生成してください。
 役割に応じた特別な選択肢も含めてください。
@@ -467,7 +502,8 @@ JSON形式で回答：
   "choices": [
     {
       "id": "choice_1",
-      "text": "選択肢の説明",
+      "text": "選択肢の説明（必ず日本語）",
+      "dayChange": 0,
       "consequences": {
         "immediate": [
           {
@@ -479,19 +515,16 @@ JSON形式で回答：
       }
     }
   ]
-}
-        `,
-      },
-    ]);
+}`);
 
-    const result = this.parseAIResponse(response.text);
+    const result = this.parseAIResponse<ChoiceGenerationResponse>(response.text);
     return result.choices || [];
   }
 
   /**
    * ゲーム状態の管理と更新
    */
-  private async manageGameState(stateUpdates: any): Promise<string> {
+  private async manageGameState(stateUpdates: StateChanges): Promise<string> {
     // ゲーム状態の更新ロジック
     console.log('🎮 GameMaster: ゲーム状態を更新中...', stateUpdates);
 
@@ -559,25 +592,25 @@ JSON形式で回答：
   }
 
   /**
-   * AIレスポンスをパース
+   * AIレスポンスをパース（型安全版）
    */
-  private parseAIResponse(response: string): any {
+  private parseAIResponse<T = AIActionResponse>(response: string): T {
     try {
       // JSONコードブロックから抽出
       const jsonMatch =
         response.match(/```json\s*([\s\S]*?)\s*```/) || response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[1] || jsonMatch[0]);
+        return JSON.parse(jsonMatch[1] || jsonMatch[0]) as T;
       }
 
       // 直接JSONとして試行
-      return JSON.parse(response);
+      return JSON.parse(response) as T;
     } catch (error) {
       console.error('AI応答のパースに失敗:', error);
       console.log('原文:', response.substring(0, 200) + '...');
 
-      // フォールバックレスポンス
-      return {
+      // フォールバックレスポンス（型に応じて適切なデフォルトを返す）
+      const fallback = {
         narrative: 'システムエラーが発生しました。もう一度お試しください。',
         stateChanges: {},
         choices: [
@@ -589,7 +622,9 @@ JSON形式で回答：
         ],
         needsDelegation: false,
         delegationTarget: null,
-      };
+      } as AIActionResponse;
+
+      return fallback as T;
     }
   }
 }
