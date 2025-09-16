@@ -2,7 +2,18 @@ import { Agent } from '@voltagent/core';
 import { VercelAIProvider } from '@voltagent/vercel-ai';
 import { xai } from '@ai-sdk/xai';
 import { z } from 'zod';
-import { GameState, PlayerRole, GameEvent, Choice } from '../types';
+import {
+  GameState,
+  PlayerRole,
+  GameEvent,
+  Choice,
+  AIActionResponse,
+  StateChanges,
+  NPCDelegationResponse,
+  EventData,
+  ChoiceGenerationResponse
+} from '../types';
+import { AIError, handleError } from '../utils/errorHandler';
 
 /**
  * GameMaster Supervisor Agent
@@ -156,7 +167,7 @@ export class GameMasterAgent extends Agent<{ llm: VercelAIProvider }> {
   ]
 }`);
 
-      const aiResponse = this.parseAIResponse(response.text);
+      const aiResponse = this.parseAIResponse<AIActionResponse>(response.text);
 
       // NPCへの委譲が必要な場合
       if (aiResponse.needsDelegation && aiResponse.delegationTarget) {
@@ -194,8 +205,15 @@ export class GameMasterAgent extends Agent<{ llm: VercelAIProvider }> {
         choices: aiResponse.choices || [],
       };
     } catch (error) {
-      console.error('プレイヤー行動処理中にエラーが発生:', error);
-      throw new Error(`行動処理に失敗しました: ${error}`);
+      const errorMessage = handleError(error, 'GameMasterAgent.processPlayerAction');
+      throw new AIError(
+        `❌ プレイヤー行動処理に失敗しました: ${errorMessage}`,
+        {
+          playerInput,
+          currentDay: gameState.currentDay,
+          playerRole: gameState.playerRole
+        }
+      );
     }
   }
 
@@ -251,7 +269,7 @@ JSON形式で回答：
   ]
 }`);
 
-    const eventData = this.parseAIResponse(response.text);
+    const eventData = this.parseAIResponse<EventData>(response.text);
 
     return {
       id: 'day_1_opening',
@@ -320,7 +338,7 @@ JSON形式で回答：
   }
 }`);
 
-      return this.parseAIResponse(response.text);
+      return this.parseAIResponse<NPCDelegationResponse>(response.text);
     } catch (error) {
       console.error(`NPC委譲エラー (${npcName}):`, error);
       return {
@@ -342,21 +360,9 @@ JSON形式で回答：
       location: string;
       gameState?: Record<string, unknown>;
     }
-  ): Promise<{
-    needsDelegation: boolean;
-    delegationTarget: string | null;
-    narrative: string;
-    stateChanges: Record<string, unknown>;
-    choices: Choice[];
-  }> {
+  ): Promise<AIActionResponse> {
     // GameMaster による行動の解釈と委譲判断
-    const evaluation: {
-      needsDelegation: boolean;
-      delegationTarget: string | null;
-      narrative: string;
-      stateChanges: Record<string, unknown>;
-      choices: Choice[];
-    } = {
+    const evaluation: AIActionResponse = {
       needsDelegation: false,
       delegationTarget: null,
       narrative: '',
@@ -406,7 +412,7 @@ JSON形式で回答：
   /**
    * ゲーム状態の変更を適用
    */
-  private applyStateChanges(gameState: GameState, changes: any): GameState {
+  private applyStateChanges(gameState: GameState, changes: StateChanges): GameState {
     const newState = { ...gameState };
 
     // ステータス変更の処理（改善版）
@@ -511,14 +517,14 @@ JSON形式で回答：
   ]
 }`);
 
-    const result = this.parseAIResponse(response.text);
+    const result = this.parseAIResponse<ChoiceGenerationResponse>(response.text);
     return result.choices || [];
   }
 
   /**
    * ゲーム状態の管理と更新
    */
-  private async manageGameState(stateUpdates: any): Promise<string> {
+  private async manageGameState(stateUpdates: StateChanges): Promise<string> {
     // ゲーム状態の更新ロジック
     console.log('🎮 GameMaster: ゲーム状態を更新中...', stateUpdates);
 
@@ -586,25 +592,25 @@ JSON形式で回答：
   }
 
   /**
-   * AIレスポンスをパース
+   * AIレスポンスをパース（型安全版）
    */
-  private parseAIResponse(response: string): any {
+  private parseAIResponse<T = AIActionResponse>(response: string): T {
     try {
       // JSONコードブロックから抽出
       const jsonMatch =
         response.match(/```json\s*([\s\S]*?)\s*```/) || response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[1] || jsonMatch[0]);
+        return JSON.parse(jsonMatch[1] || jsonMatch[0]) as T;
       }
 
       // 直接JSONとして試行
-      return JSON.parse(response);
+      return JSON.parse(response) as T;
     } catch (error) {
       console.error('AI応答のパースに失敗:', error);
       console.log('原文:', response.substring(0, 200) + '...');
 
-      // フォールバックレスポンス
-      return {
+      // フォールバックレスポンス（型に応じて適切なデフォルトを返す）
+      const fallback = {
         narrative: 'システムエラーが発生しました。もう一度お試しください。',
         stateChanges: {},
         choices: [
@@ -616,7 +622,9 @@ JSON形式で回答：
         ],
         needsDelegation: false,
         delegationTarget: null,
-      };
+      } as AIActionResponse;
+
+      return fallback as T;
     }
   }
 }

@@ -94,3 +94,35 @@ export type EndingType =
   | 'BETRAYAL_SUCCESS'
   | 'MERCHANT_SUCCESS'
   | 'UNEXPECTED_PEACE';
+
+// AI Response Types for improved type safety
+export interface AIActionResponse {
+  needsDelegation: boolean;
+  delegationTarget: string | null;
+  narrative: string;
+  stateChanges: StateChanges;
+  dayChange?: number;
+  choices: Choice[];
+}
+
+export interface StateChanges {
+  stats?: Partial<PlayerStats>;
+  flags?: Record<string, boolean>;
+  location?: string;
+  day?: number;
+}
+
+export interface NPCDelegationResponse {
+  narrative: string;
+  stateChanges?: StateChanges;
+}
+
+export interface EventData {
+  title: string;
+  description: string;
+  choices: Choice[];
+}
+
+export interface ChoiceGenerationResponse {
+  choices: Choice[];
+}

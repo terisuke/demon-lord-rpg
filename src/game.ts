@@ -2,7 +2,7 @@ import { GameMasterAgent } from './agents/GameMasterAgent';
 import { ElderMorganAgent, MerchantGromAgent, ElaraSageAgent } from './agents/NPCAgents';
 import { GameWorkflowManager } from './workflows/gameWorkflow';
 import { GameState, PlayerRole, GameEvent } from './types';
-import { GameStateSchema, PlayerRoleSchema } from './schemas';
+import { GAME_CONSTANTS } from './config/gameConstants';
 import * as readline from 'readline';
 import dotenv from 'dotenv';
 
@@ -23,7 +23,7 @@ export class DemonLordRPG {
   constructor() {
     const apiKey = process.env.XAI_API_KEY;
     if (!apiKey) {
-      throw new Error('XAI_API_KEY が設定されていません');
+      throw new Error(GAME_CONSTANTS.ERROR_MESSAGES.MISSING_API_KEY);
     }
 
     // NPCエージェントを初期化
@@ -79,7 +79,7 @@ export class DemonLordRPG {
 
       // バリデーション
       if (!playerName || playerName.trim().length === 0) {
-        throw new Error('名前を入力してください');
+        throw new Error(GAME_CONSTANTS.ERROR_MESSAGES.INVALID_PLAYER_NAME);
       }
 
       console.log('');
@@ -134,7 +134,7 @@ export class DemonLordRPG {
    * メインゲームループ
    */
   private async gameLoop(): Promise<void> {
-    while (this.currentGameState && this.currentGameState.currentDay <= 30) {
+    while (this.currentGameState && this.currentGameState.currentDay <= GAME_CONSTANTS.MAX_DAYS) {
       try {
         console.log('');
         console.log(`📅 Day ${this.currentGameState.currentDay}/30`);
@@ -230,21 +230,118 @@ export class DemonLordRPG {
           this.currentGameState = result.updatedGameState;
         }
 
-        // 1日が終了したかチェック（簡易実装）
-        // TODO: より詳細な時間進行システムを実装
-        if (Math.random() > 0.7) {
-          // 30%の確率で日が進む
-          this.currentGameState.currentDay += 1;
+        // 行動複雑度に基づく動的時間進行システム
+        const shouldAdvanceDay = this.evaluateTimeProgression(playerInput, this.currentGameState!);
+        
+        if (shouldAdvanceDay.advance) {
+          const previousDay = this.currentGameState.currentDay;
+          this.currentGameState.currentDay += shouldAdvanceDay.daysToAdd;
+          
+          console.log(`⏰ 時間経過: Day ${previousDay} → Day ${this.currentGameState.currentDay} (${shouldAdvanceDay.reason})`);
 
-          if (this.currentGameState.currentDay > 30) {
+          if (this.currentGameState.currentDay > GAME_CONSTANTS.MAX_DAYS) {
             await this.endGame();
             break;
           }
+
+          // 日数進行に伴う状態変化
+          this.applyDayProgressionEffects(shouldAdvanceDay.daysToAdd);
         }
       } catch (error) {
         console.error('❌ ゲームループ中にエラーが発生しました:', error);
         console.log('もう一度お試しください。');
       }
+    }
+  }
+
+  /**
+   * 行動複雑度に基づく動的時間進行評価
+   */
+  private evaluateTimeProgression(
+    action: string, 
+    gameState: GameState
+  ): { advance: boolean; daysToAdd: number; reason: string } {
+    const lowerAction = action.toLowerCase();
+    
+    // 簡単な行動 (時間経過なし)
+    const quickActions = ['話す', 'talk', '聞く', 'ask', '見る', 'look', 'status', 'help'];
+    if (quickActions.some(keyword => lowerAction.includes(keyword))) {
+      return { advance: false, daysToAdd: 0, reason: '簡単な行動のため時間経過なし' };
+    }
+    
+    // 時間のかかる行動 (1日進行)
+    const timeConsumingActions = [
+      '旅', 'travel', '探索', 'explore', '訓練', 'train', 'practice',
+      '作る', 'craft', 'make', '建設', 'build', '修理', 'repair',
+      '研究', 'research', '学ぶ', 'learn', '狩り', 'hunt'
+    ];
+    
+    if (timeConsumingActions.some(keyword => lowerAction.includes(keyword))) {
+      return { advance: true, daysToAdd: 1, reason: '時間のかかる行動のため1日経過' };
+    }
+    
+    // 非常に時間のかかる行動 (2日進行)
+    const veryTimeConsumingActions = [
+      '遠征', 'expedition', '長旅', 'long journey', '大工事', 'major construction',
+      '深い研究', 'deep research', '難しい', 'difficult'
+    ];
+    
+    if (veryTimeConsumingActions.some(keyword => lowerAction.includes(keyword))) {
+      return { advance: true, daysToAdd: 2, reason: '非常に時間のかかる行動のため2日経過' };
+    }
+    
+    // デフォルト: 30%の確率で1日進行（従来の動作を一部保持）
+    const shouldAdvance = Math.random() > GAME_CONSTANTS.RANDOM_DAY_ADVANCE_THRESHOLD;
+    if (shouldAdvance) {
+      return { advance: true, daysToAdd: 1, reason: 'ランダムな時間経過' };
+    }
+    
+    return { advance: false, daysToAdd: 0, reason: '時間経過なし' };
+  }
+
+  /**
+   * 日数進行に伴う状態変化効果を適用
+   */
+  private applyDayProgressionEffects(daysAdvanced: number): void {
+    if (!this.currentGameState || daysAdvanced <= 0) return;
+    
+    // 基本的な状態変化
+    for (let i = 0; i < daysAdvanced; i++) {
+      // 時間経過による自然な変化
+      if (this.currentGameState.playerStats.health > GAME_CONSTANTS.FATIGUE_THRESHOLD) {
+        this.currentGameState.playerStats.health -= GAME_CONSTANTS.DAILY_REPUTATION_DECAY; // 疲労
+      }
+
+      // 評判の自然減衰（何もしないと忘れられる）
+      if (this.currentGameState.playerStats.reputation > 0) {
+        this.currentGameState.playerStats.reputation = Math.max(
+          0,
+          this.currentGameState.playerStats.reputation - GAME_CONSTANTS.DAILY_REPUTATION_DECAY
+        );
+      }
+    }
+    
+    // 特定の日における特別なイベントフラグ
+    const currentDay = this.currentGameState.currentDay;
+
+    if (currentDay >= GAME_CONSTANTS.WARNING_DAYS.DAY_10 && !this.currentGameState.gameFlags['day10_warning']) {
+      this.currentGameState.gameFlags['day10_warning'] = true;
+      console.log('📢 村人たちが魔王襲来について本格的に議論し始めました...');
+    }
+
+    if (currentDay >= GAME_CONSTANTS.WARNING_DAYS.DAY_20 && !this.currentGameState.gameFlags['day20_urgency']) {
+      this.currentGameState.gameFlags['day20_urgency'] = true;
+      console.log('⚠️ 緊張感が高まっています。残り10日です！');
+    }
+
+    if (currentDay >= GAME_CONSTANTS.WARNING_DAYS.DAY_25 && !this.currentGameState.gameFlags['day25_final_prep']) {
+      this.currentGameState.gameFlags['day25_final_prep'] = true;
+      console.log('🚨 最終準備の時期です。残り5日となりました！');
+    }
+
+    if (currentDay >= GAME_CONSTANTS.WARNING_DAYS.DAY_29 && !this.currentGameState.gameFlags['day29_imminent']) {
+      this.currentGameState.gameFlags['day29_imminent'] = true;
+      console.log('💀 魔王襲来が明日に迫りました...！');
     }
   }
 
@@ -365,7 +462,7 @@ export class DemonLordRPG {
    */
   private async endGame(): Promise<void> {
     console.log('');
-    console.log('🏰 === Day 30: 魔王襲来！ ===');
+    console.log(`🏰 === Day ${GAME_CONSTANTS.MAX_DAYS}: 魔王襲来！ ===`);
     console.log('');
     console.log('魔王軍が村に到着しました...');
     console.log('あなたの30日間の準備が試される時です！');
@@ -508,10 +605,16 @@ export class DemonLordRPG {
     if (changes.stats) {
       Object.keys(changes.stats).forEach((stat) => {
         if (stat in newState.playerStats) {
-          (newState.playerStats as any)[stat] = Math.max(
-            0,
-            Math.min(100, (newState.playerStats as any)[stat] + changes.stats[stat])
-          );
+          let newValue = (newState.playerStats as any)[stat] + changes.stats[stat];
+
+          // 能力値の範囲制限
+          if (stat === 'reputation') {
+            newValue = Math.max(GAME_CONSTANTS.MIN_REPUTATION, Math.min(GAME_CONSTANTS.MAX_REPUTATION, newValue));
+          } else {
+            newValue = Math.max(0, Math.min(GAME_CONSTANTS.MAX_HEALTH, newValue));
+          }
+
+          (newState.playerStats as any)[stat] = newValue;
         }
       });
     }
@@ -525,7 +628,7 @@ export class DemonLordRPG {
     }
 
     if (changes.day) {
-      newState.currentDay = Math.min(30, Math.max(1, changes.day));
+      newState.currentDay = Math.min(GAME_CONSTANTS.MAX_DAYS, Math.max(GAME_CONSTANTS.STARTING_DAY, changes.day));
     }
 
     if (changes.wealth !== undefined) {

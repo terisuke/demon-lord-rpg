@@ -56,8 +56,32 @@ graph TB
 2. **構造化された自由度**: ワークフローエンジンによる物語構造の管理
 3. **型安全性**: TypeScriptとZodによる厳格な型管理
 4. **モジュラー設計**: 各コンポーネントの独立性と交換可能性
+5. **設定管理**: 中央集権的な定数管理とゲームバランス調整
+6. **動的時間システム**: プレイヤー行動の複雑度に基づく適応的時間進行
 
-### 1.3 ゲームエンジン実装
+### 1.3 設定管理アーキテクチャ
+
+```typescript
+// src/config/gameConstants.ts - 中央集権的定数管理
+export const GAME_CONSTANTS = {
+  MAX_DAYS: 30,
+  MAX_HEALTH: 100,
+  WARNING_DAYS: { DAY_10: 10, DAY_20: 20, DAY_25: 25, DAY_29: 29 },
+  MODELS: {
+    GAME_MASTER: 'grok-4',
+    NPC_AGENTS: 'grok-3-mini',
+    IMAGE_GENERATOR: 'grok-2-image-1212'
+  }
+} as const;
+```
+
+**設計メリット**:
+- ゲームバランス調整の一元化
+- ハードコーディングの排除
+- 型安全な定数アクセス
+- 環境別設定の容易な切り替え
+
+### 1.4 ゲームエンジン実装
 
 プロジェクトは複数のゲーム実装アプローチをサポートする **UnifiedGameEngine** を使用：
 
@@ -169,7 +193,7 @@ interface TemporaryState {
 ### 3.2 状態フロー
 
 ```
-[Player Action] 
+[Player Action]
     ↓
 [GameMaster processes]
     ↓
@@ -177,6 +201,50 @@ interface TemporaryState {
     ├─→ [Persistent: LibSQL] (セーブデータ)
     └─→ [Temporary: userContext] (セッション内のみ)
 ```
+
+### 3.3 動的時間進行システム
+
+プレイヤーの行動複雑度に基づいて適応的に時間が進行するシステムを実装:
+
+```typescript
+// src/game.ts - 動的時間進行評価
+private evaluateTimeProgression(action: string, gameState: GameState): {
+  advance: boolean;
+  daysToAdd: number;
+  reason: string;
+} {
+  const lowerAction = action.toLowerCase();
+
+  // 簡単な行動 (時間経過なし)
+  const quickActions = ['話す', 'talk', '聞く', 'ask', '見る', 'look'];
+  if (quickActions.some(keyword => lowerAction.includes(keyword))) {
+    return { advance: false, daysToAdd: 0, reason: '簡単な行動のため時間経過なし' };
+  }
+
+  // 時間のかかる行動 (1日進行)
+  const timeConsumingActions = ['探索', 'explore', '訓練', 'train', '作る', 'craft'];
+  if (timeConsumingActions.some(keyword => lowerAction.includes(keyword))) {
+    return { advance: true, daysToAdd: 1, reason: '時間のかかる行動のため1日経過' };
+  }
+
+  // 非常に時間のかかる行動 (2日進行)
+  const veryTimeConsumingActions = ['遠征', 'expedition', '長旅', 'long journey'];
+  if (veryTimeConsumingActions.some(keyword => lowerAction.includes(keyword))) {
+    return { advance: true, daysToAdd: 2, reason: '非常に時間のかかる行動のため2日経過' };
+  }
+
+  // デフォルト: 確率的時間進行
+  return Math.random() > GAME_CONSTANTS.RANDOM_DAY_ADVANCE_THRESHOLD
+    ? { advance: true, daysToAdd: 1, reason: 'ランダムな時間経過' }
+    : { advance: false, daysToAdd: 0, reason: '時間経過なし' };
+}
+```
+
+**時間進行ルール**:
+- **簡単な行動** (会話、情報収集): 時間経過なし
+- **中程度の行動** (訓練、制作、探索): 1日経過
+- **複雑な行動** (遠征、大きな戦闘): 2-4日経過
+- **確率的要素**: 30%の確率でランダム進行（従来との互換性）
 
 ## 4. データスキーマ設計
 
@@ -205,7 +273,7 @@ export const GameStateSchema = z.object({
 export const EndingSchema = z.object({
   type: z.enum([
     "PERFECT_VICTORY",
-    "COSTLY_VICTORY", 
+    "COSTLY_VICTORY",
     "TACTICAL_RETREAT",
     "DEVASTATING_DEFEAT",
     "ESCAPE_SUCCESS",
@@ -218,6 +286,40 @@ export const EndingSchema = z.object({
   })
 });
 ```
+
+### 4.2 型安全性の強化
+
+**2024年改善**: `any`型の排除と専用インターフェースの導入により、コンパイル時エラー検出を強化:
+
+```typescript
+// src/types/index.ts - 新しい型定義
+export interface AIActionResponse {
+  needsDelegation: boolean;
+  delegationTarget: string | null;
+  narrative: string;
+  stateChanges: StateChanges;
+  dayChange?: number;
+  choices: Choice[];
+}
+
+export interface StateChanges {
+  stats?: Partial<PlayerStats>;
+  flags?: Record<string, boolean>;
+  location?: string;
+  day?: number;
+}
+
+export interface NPCDelegationResponse {
+  narrative: string;
+  stateChanges?: StateChanges;
+}
+```
+
+**型安全性のメリット**:
+- **コンパイル時検証**: 不正な型使用を事前に検出
+- **IDE支援**: より良いオートコンプリートとリファクタリング
+- **ランタイムエラー削減**: 型ミスマッチによるバグを防止
+- **メンテナンス性向上**: 型変更の影響範囲を明確化
 
 ## 5. 通信アーキテクチャ
 
@@ -321,6 +423,67 @@ function sanitizeCommand(input: string): string {
     .replace(/[<>]/g, '');
 }
 ```
+
+### 8.3 エラーハンドリングアーキテクチャ
+
+**2024年改善**: 統一されたエラーハンドリングシステムの導入:
+
+```typescript
+// src/utils/errorHandler.ts - カスタムエラークラス
+export class GameError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public context?: any
+  ) {
+    super(message);
+    this.name = 'GameError';
+  }
+}
+
+export class APIError extends GameError {
+  constructor(message: string, public statusCode?: number, context?: any) {
+    super(message, 'API_ERROR', context);
+  }
+}
+
+export class AIError extends GameError {
+  constructor(message: string, context?: any) {
+    super(message, 'AI_ERROR', context);
+  }
+}
+
+// 統一エラーハンドラー
+export function handleError(error: unknown, context: string): string {
+  console.error(`[${context}] エラー:`, error);
+
+  if (error instanceof GameError) {
+    return `ゲームエラー: ${error.message}`;
+  }
+
+  if (error instanceof Error) {
+    // API関連エラーの識別
+    if (error.message.includes('fetch') || error.message.includes('network')) {
+      return 'ネットワークエラーが発生しました。しばらく待ってから再試行してください。';
+    }
+
+    // レート制限エラーの識別
+    if (error.message.includes('429') || error.message.includes('rate limit')) {
+      return 'API制限に達しました。少し時間をおいてから再試行してください。';
+    }
+
+    return `予期しないエラー: ${error.message}`;
+  }
+
+  return '不明なエラーが発生しました。';
+}
+```
+
+**エラーハンドリングの特徴**:
+- **階層化されたエラータイプ**: GameError > APIError, AIError
+- **コンテキスト情報**: エラー発生箇所の追跡
+- **ユーザーフレンドリーメッセージ**: 技術的詳細を隠蔽
+- **統一されたログ出力**: デバッグとモニタリングの支援
 
 ## 9. デバッグとモニタリング
 

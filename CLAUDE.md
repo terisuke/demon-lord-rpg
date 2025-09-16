@@ -199,15 +199,34 @@ Key variables in `.env`:
 
 **Test API Connection**:
 ```bash
-node -e "
+# Ensure XAI_API_KEY is set in your environment
+echo "Testing with API key: ${XAI_API_KEY:0:8}..." # Shows only first 8 chars
+
+# Run test
+npx tsx -e "
 import { xai } from '@ai-sdk/xai';
 import { generateText } from 'ai';
-const { text } = await generateText({
-  model: xai('grok-3-mini'),
-  prompt: 'Hello',
-  maxTokens: 10
-});
-console.log(text);
+import * as dotenv from 'dotenv';
+
+dotenv.config();
+
+if (!process.env.XAI_API_KEY) {
+  console.error('❌ XAI_API_KEY not found. Set it in .env file');
+  process.exit(1);
+}
+
+try {
+  const { text } = await generateText({
+    model: xai('grok-3-mini'),
+    prompt: 'Hello in Japanese',
+    maxTokens: 10
+  });
+  console.log('✅ API connection successful');
+  console.log('Response:', text);
+} catch (error) {
+  console.error('❌ API test failed:', error.message);
+  process.exit(1);
+}
 "
 ```
 
