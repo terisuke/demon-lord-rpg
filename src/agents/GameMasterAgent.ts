@@ -8,8 +8,10 @@ import { GameState, PlayerRole, GameEvent, Choice } from '../types';
  * GameMaster Supervisor Agent
  * Volt Agent フレームワークの Supervisor/Sub-agent パターンに準拠
  */
-export class GameMasterAgent extends Agent<VercelAIProvider> {
-  constructor(subAgents?: Record<string, Agent<VercelAIProvider>>) {
+export class GameMasterAgent extends Agent<{ llm: VercelAIProvider }> {
+  private subAgents: Record<string, Agent<{ llm: VercelAIProvider }>>;
+
+  constructor(subAgents?: Record<string, Agent<{ llm: VercelAIProvider }>>) {
     super({
       name: 'GameMaster',
       instructions: `
@@ -50,45 +52,10 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
       `,
       llm: new VercelAIProvider(),
       model: xai('grok-4'), // Supervisor用の高性能モデル
-      subAgents: subAgents, // Volt Agent フレームワークの sub-agent 管理
-      tools: [
-        {
-          id: 'evaluate_player_action',
-          name: 'evaluate_player_action',
-          description: 'プレイヤーの行動を評価し、委託の必要性を判断する',
-          parameters: z.object({
-            playerAction: z.string(),
-            gameContext: z.object({
-              playerName: z.string(),
-              playerRole: z.string(),
-              currentDay: z.number(),
-              location: z.string(),
-              gameState: z.any(),
-            }),
-          }),
-          execute: async (params) => {
-            return await this.evaluatePlayerAction(params.playerAction, params.gameContext);
-          },
-        },
-        {
-          id: 'manage_game_state',
-          name: 'manage_game_state',
-          description: 'ゲーム状態の更新と管理',
-          parameters: z.object({
-            stateUpdates: z.object({
-              stats: z.record(z.number()).optional(),
-              flags: z.record(z.boolean()).optional(),
-              location: z.string().optional(),
-              day: z.number().optional(),
-              inventory: z.array(z.any()).optional(),
-            }),
-          }),
-          execute: async (params) => {
-            return await this.manageGameState(params.stateUpdates);
-          },
-        },
-      ],
     });
+
+    // Store sub-agents as instance property for delegation
+    this.subAgents = subAgents || {};
   }
 
   /**
@@ -120,12 +87,7 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
     };
 
     // GameMasterとしてゲーム開始を宣言
-    await this.generateText([
-      {
-        role: 'user',
-        content: `新しいゲーム「30日後の魔王襲来」を開始します。プレイヤー「${playerName}」（役割：${playerRole}）の冒険が始まります。`,
-      },
-    ]);
+    await this.generateText(`新しいゲーム「30日後の魔王襲来」を開始します。プレイヤー「${playerName}」（役割：${playerRole}）の冒険が始まります。`);
 
     return initialGameState;
   }
@@ -143,10 +105,7 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
   }> {
     try {
       // GameMasterとしてプレイヤーの行動を解釈
-      const response = await this.generateText([
-        {
-          role: 'user',
-          content: `
+      const response = await this.generateText(`
 プレイヤー「${gameState.playerName}」（役割: ${gameState.playerRole}）がDay ${gameState.currentDay}で以下の行動を取りました：
 "${playerInput}"
 
@@ -170,17 +129,14 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
   },
   "choices": [
     {
-      "id": "choice_1", 
+      "id": "choice_1",
       "text": "選択肢の文章",
       "consequences": {
         "immediate": []
       }
     }
   ]
-}
-          `,
-        },
-      ]);
+}`);
 
       const aiResponse = this.parseAIResponse(response.text);
 
@@ -237,10 +193,7 @@ export class GameMasterAgent extends Agent<VercelAIProvider> {
       }
     );
 
-    const response = await this.generateText([
-      {
-        role: 'user',
-        content: `
+    const response = await this.generateText(`
 Day 1のオープニングイベントを作成してください。
 プレイヤー「${gameState.playerName}」（役割: ${gameState.playerRole}）
 
@@ -261,17 +214,14 @@ JSON形式で回答：
         "immediate": [
           {
             "type": "stat",
-            "target": "reputation", 
+            "target": "reputation",
             "change": 10
           }
         ]
       }
     }
   ]
-}
-        `,
-      },
-    ]);
+}`);
 
     const eventData = this.parseAIResponse(response.text);
 
@@ -303,7 +253,7 @@ JSON形式で回答：
   }> {
     try {
       // サブエージェントが利用可能かチェック
-      const subAgent = (this.subAgents as any)?.[npcName];
+      const subAgent = this.subAgents[npcName];
       if (!subAgent) {
         console.warn(`NPC ${npcName} not found, using GameMaster fallback`);
         return {
@@ -313,10 +263,7 @@ JSON形式で回答：
       }
 
       // サブエージェントに委譲
-      const response = await subAgent.generateText([
-        {
-          role: 'user',
-          content: `
+      const response = await subAgent.generateText(`
 プレイヤー「${context.playerName}」（役割: ${context.playerRole}）がDay ${context.currentDay}に以下のタスクを要求しました：
 "${task}"
 
@@ -329,10 +276,7 @@ JSON形式で回答：
     "stats": {},
     "flags": {}
   }
-}
-          `,
-        },
-      ]);
+}`);
 
       return this.parseAIResponse(response.text);
     } catch (error) {
@@ -364,7 +308,13 @@ JSON形式で回答：
     choices: Choice[];
   }> {
     // GameMaster による行動の解釈と委譲判断
-    const evaluation = {
+    const evaluation: {
+      needsDelegation: boolean;
+      delegationTarget: string | null;
+      narrative: string;
+      stateChanges: Record<string, unknown>;
+      choices: Choice[];
+    } = {
       needsDelegation: false,
       delegationTarget: null,
       narrative: '',
@@ -451,10 +401,7 @@ JSON形式で回答：
     playerRole: string,
     availableActions?: string[]
   ): Promise<Choice[]> {
-    const response = await this.generateText([
-      {
-        role: 'user',
-        content: `
+    const response = await this.generateText(`
 状況: ${situation}
 プレイヤー役割: ${playerRole}
 利用可能な行動: ${availableActions?.join(', ') || '自由'}
@@ -479,10 +426,7 @@ JSON形式で回答：
       }
     }
   ]
-}
-        `,
-      },
-    ]);
+}`);
 
     const result = this.parseAIResponse(response.text);
     return result.choices || [];

@@ -7,7 +7,7 @@ import { z } from 'zod';
  * Elder Morgan - 村長
  * 威厳のある村の長老。政治的決定と村の運営を担当
  */
-export class ElderMorganAgent extends Agent<VercelAIProvider> {
+export class ElderMorganAgent extends Agent<{ llm: VercelAIProvider }> {
   constructor() {
     super({
       name: 'Elder_Morgan',
@@ -97,7 +97,7 @@ export class ElderMorganAgent extends Agent<VercelAIProvider> {
  * Merchant Grom - 商人兼鍛冶屋
  * 実直な性格で商売と武器製作を担当
  */
-export class MerchantGromAgent extends Agent<VercelAIProvider> {
+export class MerchantGromAgent extends Agent<{ llm: VercelAIProvider }> {
   constructor() {
     super({
       name: 'Merchant_Grom',
@@ -205,7 +205,7 @@ export class MerchantGromAgent extends Agent<VercelAIProvider> {
  * Elara the Sage - 賢者
  * 魔法と予言に詳しい知識人
  */
-export class ElaraSageAgent extends Agent<VercelAIProvider> {
+export class ElaraSageAgent extends Agent<{ llm: VercelAIProvider }> {
   constructor() {
     super({
       name: 'Elara_Sage',
